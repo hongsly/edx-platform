@@ -5,6 +5,8 @@ that are stored in a database an accessible using their Location as an identifie
 
 import logging
 import re
+import json
+import datetime
 
 from collections import namedtuple, defaultdict
 import collections
@@ -20,13 +22,23 @@ from opaque_keys import InvalidKeyError
 from opaque_keys.edx.locations import SlashSeparatedCourseKey
 from xblock.runtime import Mixologist
 from xblock.core import XBlock
-import datetime
 
 log = logging.getLogger('edx.modulestore')
 
 SPLIT_MONGO_MODULESTORE_TYPE = 'split'
 MONGO_MODULESTORE_TYPE = 'mongo'
 XML_MODULESTORE_TYPE = 'xml'
+
+
+class PublishState(object):
+    """
+    The publish state for a given xblock-- either 'draft', 'private', or 'public'.
+
+    Currently in CMS, an xblock can only be in 'draft' or 'private' if it is at or below the Unit level.
+    """
+    draft = 'draft'
+    private = 'private'
+    public = 'public'
 
 
 class ModuleStoreRead(object):
@@ -184,11 +196,9 @@ class ModuleStoreRead(object):
         pass
 
     @abstractmethod
-    def get_parent_locations(self, location):
-        '''Find all locations that are the parents of this location in this
+    def get_parent_location(self, location, **kwargs):
+        '''Find the location that is the parent of this location in this
         course.  Needed for path_to_location().
-
-        returns an iterable of things that can be passed to Location.
         '''
         pass
 
@@ -245,11 +255,14 @@ class ModuleStoreWrite(ModuleStoreRead):
     @abstractmethod
     def delete_item(self, location, user_id=None, **kwargs):
         """
-        Delete an item from persistence. Pass the user's unique id which the persistent store
+        Delete an item and its subtree from persistence. Remove the item from any parents (Note, does not
+        affect parents from other branches or logical branches; thus, in old mongo, deleting something
+        whose parent cannot be draft, deletes it from both but deleting a component under a draft vertical
+        only deletes it from the draft.
+
+        Pass the user's unique id which the persistent store
         should save with the update if it has that ability.
 
-        :param delete_all_versions: removes both the draft and published version of this item from
-        the course if using draft and old mongo. Split may or may not implement this.
         :param force: fork the structure and don't update the course draftVersion if there's a version
         conflict (only applicable to version tracking and conflict detecting persistence stores)
 
@@ -346,7 +359,7 @@ class ModuleStoreReadBase(ModuleStoreRead):
 
     def has_course(self, course_id, ignore_case=False):
         """
-        Look for a specific course id.  Returns whether it exists.
+        Returns the course_id of the course if it was found, else None
         Args:
             course_id (CourseKey):
             ignore_case (boolean): some modulestores are case-insensitive. Use this flag
@@ -355,12 +368,18 @@ class ModuleStoreReadBase(ModuleStoreRead):
         # linear search through list
         assert(isinstance(course_id, CourseKey))
         if ignore_case:
-            return any(
-                (c.id.org.lower() == course_id.org.lower() and c.id.offering.lower() == course_id.offering.lower())
-                for c in self.get_courses()
+            return next(
+                (
+                    c.id for c in self.get_courses()
+                    if c.id.org.lower() == course_id.org.lower() and c.id.offering.lower() == course_id.offering.lower()
+                ),
+                None
             )
         else:
-            return any(c.id == course_id for c in self.get_courses())
+            return next(
+                (c.id for c in self.get_courses() if c.id == course_id),
+                None
+            )
 
     def heartbeat(self):
         """
@@ -411,13 +430,12 @@ class ModuleStoreWriteBase(ModuleStoreReadBase, ModuleStoreWrite):
         """
         raise NotImplementedError
 
-    def delete_item(self, location, user_id=None, delete_all_versions=False, delete_children=False, force=False):
+    def delete_item(self, location, user_id=None, force=False):
         """
         Delete an item from persistence. Pass the user's unique id which the persistent store
         should save with the update if it has that ability.
 
-        :param delete_all_versions: removes both the draft and published version of this item from
-        the course if using draft and old mongo. Split may or may not implement this.
+        :param user_id: ID of the user deleting the item
         :param force: fork the structure and don't update the course draftVersion if there's a version
         conflict (only applicable to version tracking and conflict detecting persistence stores)
 
@@ -425,6 +443,21 @@ class ModuleStoreWriteBase(ModuleStoreReadBase, ModuleStoreWrite):
         version head != version_guid and force is not True. (only applicable to version tracking stores)
         """
         raise NotImplementedError
+
+    def create_and_save_xmodule(self, location, user_id, definition_data=None, metadata=None, runtime=None, fields={}):
+        """
+        Create the new xmodule and save it.
+
+        :param location: a Location--must have a category
+        :param user_id: ID of the user creating and saving the xmodule
+        :param definition_data: can be empty. The initial definition_data for the kvs
+        :param metadata: can be empty, the initial metadata for the kvs
+        :param runtime: if you already have an xblock from the course, the xblock.runtime value
+        :param fields: a dictionary of field names and values for the new xmodule
+        """
+        new_object = self.create_xmodule(location, definition_data, metadata, runtime, fields)
+        self.update_item(new_object, user_id, allow_not_found=True)
+        return new_object
 
 
 def only_xmodules(identifier, entry_points):
@@ -441,3 +474,25 @@ def prefer_xmodules(identifier, entry_points):
         return default_select(identifier, from_xmodule)
     else:
         return default_select(identifier, entry_points)
+
+
+class EdxJSONEncoder(json.JSONEncoder):
+    """
+    Custom JSONEncoder that handles `Location` and `datetime.datetime` objects.
+
+    `Location`s are encoded as their url string form, and `datetime`s as
+    ISO date strings
+    """
+    def default(self, obj):
+        if isinstance(obj, Location):
+            return obj.to_deprecated_string()
+        elif isinstance(obj, datetime.datetime):
+            if obj.tzinfo is not None:
+                if obj.utcoffset() is None:
+                    return obj.isoformat() + 'Z'
+                else:
+                    return obj.isoformat()
+            else:
+                return obj.isoformat()
+        else:
+            return super(EdxJSONEncoder, self).default(obj)

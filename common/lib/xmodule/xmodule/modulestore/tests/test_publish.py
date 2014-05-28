@@ -50,18 +50,6 @@ class TestPublish(SplitWMongoCourseBoostrapper):
         self._create_item('about', 'overview', "<p>overview</p>", {}, None, None, split=False)
         self._create_item('course_info', 'updates', "<ol><li><h2>Sep 22</h2><p>test</p></li></ol>", {}, None, None, split=False)
 
-    def _xmodule_recurse(self, item, action):
-        """
-        Applies action depth-first down tree and to item last.
-
-        A copy of  cms.djangoapps.contentstore.views.helpers._xmodule_recurse to reproduce its use and behavior
-        outside of django.
-        """
-        for child in item.get_children():
-            self._xmodule_recurse(child, action)
-
-        action(item)
-
     def test_publish_draft_delete(self):
         """
         To reproduce a bug (STUD-811) publish a vertical, convert to draft, delete a child, move a child, publish.
@@ -69,29 +57,28 @@ class TestPublish(SplitWMongoCourseBoostrapper):
         """
         location = self.old_course_key.make_usage_key('vertical', name='Vert1')
         item = self.draft_mongo.get_item(location, 2)
-        self._xmodule_recurse(
-            item,
-            lambda i: self.draft_mongo.publish(i.location, self.userid)
-        )
+        self.draft_mongo.publish(item.location, self.userid)
+
         # verify status
         item = self.draft_mongo.get_item(location, 0)
         self.assertFalse(getattr(item, 'is_draft', False), "Item was published. Draft should not exist")
         # however, children are still draft, but I'm not sure that's by design
 
         # convert back to draft
-        self.draft_mongo.convert_to_draft(location)
+        self.draft_mongo.convert_to_draft(location, self.userid)
         # both draft and published should exist
         draft_vert = self.draft_mongo.get_item(location, 0)
         self.assertTrue(getattr(draft_vert, 'is_draft', False), "Item was converted to draft but doesn't say so")
         item = self.old_mongo.get_item(location, 0)
         self.assertFalse(getattr(item, 'is_draft', False), "Published item doesn't say so")
 
-        # delete the discussion (which oddly is not in draft mode)
+        # delete the draft version of the discussion
         location = self.old_course_key.make_usage_key('discussion', name='Discussion1')
-        self.draft_mongo.delete_item(location)
-        # remove pointer from draft vertical (verify presence first to ensure process is valid)
-        self.assertIn(location, draft_vert.children)
-        draft_vert.children.remove(location)
+        self.draft_mongo.delete_item(location, self.userid)
+
+        draft_vert = self.draft_mongo.get_item(draft_vert.location, 0)
+        # remove pointer from draft vertical (still there b/c not refetching vert)
+        self.assertNotIn(location, draft_vert.children)
         # move the other child
         other_child_loc = self.old_course_key.make_usage_key('html', name='Html2')
         draft_vert.children.remove(other_child_loc)
@@ -100,12 +87,10 @@ class TestPublish(SplitWMongoCourseBoostrapper):
         self.draft_mongo.update_item(draft_vert, self.userid)
         self.draft_mongo.update_item(other_vert, self.userid)
         # publish
-        self._xmodule_recurse(
-            draft_vert,
-            lambda i: self.draft_mongo.publish(i.location, self.userid)
-        )
+        self.draft_mongo.publish(draft_vert.location, self.userid)
         item = self.old_mongo.get_item(draft_vert.location, 0)
         self.assertNotIn(location, item.children)
+        self.assertIsNone(self.draft_mongo.get_parent_location(location))
         with self.assertRaises(ItemNotFoundError):
             self.draft_mongo.get_item(location)
         self.assertNotIn(other_child_loc, item.children)
