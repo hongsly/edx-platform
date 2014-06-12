@@ -160,7 +160,11 @@ class TextbookList(List):
 
 
 class CourseFields(object):
-    lti_passports = List(help="LTI tools passports as id:client_key:client_secret", scope=Scope.settings)
+    lti_passports = List(
+        display_name=_("LTI Passports"),
+        help=_("Enter the LTI tools passports as: id:client_key:client_secret."),
+        scope=Scope.settings
+    )
     textbooks = TextbookList(help="List of pairs of (title, url) for textbooks used in this course",
                              default=[], scope=Scope.content)
 
@@ -171,7 +175,11 @@ class CourseFields(object):
                  default=datetime(2030, 1, 1, tzinfo=UTC()),
                  scope=Scope.settings)
     end = Date(help="Date that this class ends", scope=Scope.settings)
-    advertised_start = String(help="Date that this course is advertised to start", scope=Scope.settings)
+    advertised_start = String(
+        display_name=_("Course Advertised Start Date"),
+        help=_("Enter the date you want to advertise as the course start date, if this date is different than the set start date. To advertise the set start date, enter null."),
+        scope=Scope.settings
+    )
     grading_policy = Dict(help="Grading policy definition for this class",
                           default={"GRADER": [
                               {
@@ -206,26 +214,108 @@ class CourseFields(object):
                                   "Pass": 0.5
                               }},
                           scope=Scope.content)
-    show_calculator = Boolean(help="Whether to show the calculator in this course", default=False, scope=Scope.settings)
-    display_name = String(help="Display name for this module", default="Empty", display_name=_("Display Name"), scope=Scope.settings)
-    course_edit_method = String(help="Method with which this course is edited.", default="Studio", scope=Scope.settings)
-    show_chat = Boolean(help="Whether to show the chat widget in this course", default=False, scope=Scope.settings)
+    show_calculator = Boolean(
+        display_name=_("Show Calculator"),
+        help=_("Enter true or false. When true, the calculator is shown in the course."),
+        default=False,
+        scope=Scope.settings
+    )
+    display_name = String(
+        help=_("Enter the name of the course as it should appear in the LMS course list."), 
+        default="Empty", 
+        display_name=_("Course Display Name"),
+        scope=Scope.settings
+    )
+    course_edit_method = String(
+        display_name=_("Course Editor"),
+        help=_("Enter the method by which this course is edited ('XML' or 'Studio')."),
+        default="Studio",
+        scope=Scope.settings,
+        deprecated=True  # Deprecated because someone would not edit this value within Studio.
+    )
+    show_chat = Boolean(
+        display_name=_("Show Chat Widget"),
+        help=_("Enter true or false. When true, the chat widget is shown in the course."),
+        default=False,
+        scope=Scope.settings
+    )
     tabs = CourseTabList(help="List of tabs to enable in this course", scope=Scope.settings, default=[])
-    end_of_course_survey_url = String(help="Url for the end-of-course survey", scope=Scope.settings)
-    discussion_blackouts = List(help="List of pairs of start/end dates for discussion blackouts", scope=Scope.settings)
-    discussion_topics = Dict(help="Map of topics names to ids", scope=Scope.settings)
-    discussion_sort_alpha = Boolean(scope=Scope.settings, default=False, help="Sort forum categories and subcategories alphabetically.")
-    announcement = Date(help="Date this course is announced", scope=Scope.settings)
-    cohort_config = Dict(help="Dictionary defining cohort configuration", scope=Scope.settings)
-    is_new = Boolean(help="Whether this course should be flagged as new", scope=Scope.settings)
-    no_grade = Boolean(help="True if this course isn't graded", default=False, scope=Scope.settings)
-    disable_progress_graph = Boolean(help="True if this course shouldn't display the progress graph", default=False, scope=Scope.settings)
-    pdf_textbooks = List(help="List of dictionaries containing pdf_textbook configuration", scope=Scope.settings)
-    html_textbooks = List(help="List of dictionaries containing html_textbook configuration", scope=Scope.settings)
-    remote_gradebook = Dict(scope=Scope.settings)
-    allow_anonymous = Boolean(scope=Scope.settings, default=True)
-    allow_anonymous_to_peers = Boolean(scope=Scope.settings, default=False)
-    advanced_modules = List(help="Beta modules used in your course", scope=Scope.settings)
+    end_of_course_survey_url = String(
+        display_name=_("Course Survey URL"),
+        help=_("Enter the URL for the end-of-course survey. Enter null if you are not using a survey."),
+        scope=Scope.settings
+    )
+    discussion_blackouts = List(
+        display_name="Discussion Blackout Dates",
+        help=_("Enter pairs of start and end dates between which students cannot post to disccusion forums. Enter dates as YYYY-MM-DD, optionally followed by the time as THH:MM."),
+        scope=Scope.settings
+    )
+    discussion_topics = Dict(
+        display_name=_("Discussion Topic Mapping"),
+        help=_("Enter discussion categories in the format: Category name: {id: course_id_category-identifier}."),
+        scope=Scope.settings
+    )
+    discussion_sort_alpha = Boolean(
+        display_name=_("Discussion Sorting Alphabetical"),
+        scope=Scope.settings, default=False,
+        help=_("Enter true or false. If true, forum categories and subcategories are sorted alphabetically. If false, they are sorted chronologically.")
+    )
+    announcement = Date(
+        display_name=_("Course Announcement Date"),
+        help=_("Enter the date that the course is to be announced."),
+        scope=Scope.settings
+    )
+    cohort_config = Dict(
+        display_name=_("Cohort Configuration"),
+        help=_("Enter the dictionary that defines how cohorts are configured. Note: This feature is not currently supported by edX."),
+        scope=Scope.settings
+    )
+    is_new = Boolean(
+        display_name=_("Course Is New"),
+        help=_("Enter true or false. If true, the course is flagged as new in the LMS, which impacts how the course is sorted."),
+        scope=Scope.settings
+    )
+    no_grade = Boolean(
+        display_name=_("Course Not Graded"),
+        help=_("Enter true or false. If true, the course will not be graded."),
+        default=False,
+        scope=Scope.settings
+    )
+    disable_progress_graph = Boolean(
+        display_name=_("Disable Progress Graph"),
+        help=_("Enter true or false. If true, students will not be able to view the progress graph."),
+        default=False,
+        scope=Scope.settings
+    )
+    pdf_textbooks = List(
+        display_name=_("PDF Textbooks"),
+        help=_("List of dictionaries containing pdf_textbook configuration"), scope=Scope.settings
+    )
+    html_textbooks = List(
+        display_name=_("HTML Textbooks"),
+        help=_("Enter the list of dictionaries specifying the HTML textbook configuration."),
+        scope=Scope.settings
+    )
+    remote_gradebook = Dict(
+        display_name=_("Remote Gradebook"),
+        help=_("Enter the remote gradebook mapping. Only use this setting when REMOTE_GRADEBOOK_URL has been specified."),
+        scope=Scope.settings
+    )
+    allow_anonymous = Boolean(
+        display_name=_("Allow Anonymous Discussion Posts"),
+        help=_("Enter true or false. If true, students can create anonymous discussion posts."),
+        scope=Scope.settings, default=True
+    )
+    allow_anonymous_to_peers = Boolean(
+        display_name=_("Allow Anonymous Discussion Posts to Peers"),
+        help=_("Enter true or false. If true, students can create discussion posts that are anonymous to other students."),
+        scope=Scope.settings, default=False
+    )
+    advanced_modules = List(
+        display_name=_("Advanced Module List"),
+        help=_("Enter the names of the advanced components to use in your course. Check with your edX PM before using advanced components."),
+        scope=Scope.settings
+    )
     has_children = True
     checklists = List(scope=Scope.settings,
                       default=[
@@ -342,22 +432,33 @@ class CourseFields(object):
                                       "action_text": _("Edit Course Schedule &amp; Details"),
                                       "action_external": False}]}
         ])
-    info_sidebar_name = String(scope=Scope.settings, default='Course Handouts')
+    info_sidebar_name = String(
+        display_name=_("Course Info Sidebar Name"),
+        help=_("Enter the heading that you want students to see for course handouts in the Course Info page."),
+        scope=Scope.settings, default='Course Handouts')
     show_timezone = Boolean(
         help="True if timezones should be shown on dates in the courseware. Deprecated in favor of due_date_display_format.",
         scope=Scope.settings, default=True
     )
     due_date_display_format = String(
-        help="Format supported by strftime for displaying due dates. Takes precedence over show_timezone.",
+        display_name=_("Due Date Display Format"),
+        help=_("Enter the format due dates are displayed in. The format must be supported by strftime and takes precedence over show_timezone."),
         scope=Scope.settings, default=None
     )
-    enrollment_domain = String(help="External login method associated with user accounts allowed to register in course",
-                               scope=Scope.settings)
-    certificates_show_before_end = Boolean(help="True if students may download certificates before course end",
-                                           scope=Scope.settings,
-                                           default=False)
+    enrollment_domain = String(
+        display_name=_("External login domain"),
+        help=_("Enter the external login method students can use for the course."),
+        scope=Scope.settings
+    )
+    certificates_show_before_end = Boolean(
+        display_name=_("Certificates Downloadable Before End"),
+        help=_("Enter true or false. If true, students can download certificates before the course ends."),
+        scope=Scope.settings,
+        default=False
+    )
     course_image = String(
-        help="Filename of the course image",
+        display_name=_("Course About Page Image"),
+        help=_("Enter the filename of the course image. You can also set the course image on the Settings & Details page."),
         scope=Scope.settings,
         # Ensure that courses imported from XML keep their image
         default="images_course_image.jpg"
@@ -365,12 +466,14 @@ class CourseFields(object):
 
     ## Course level Certificate Name overrides.
     cert_name_short = String(
-        help="Sitewide name of completion statements given to students (short).",
+        help=_("Between quotation marks, enter the short name of the certificate that is given to students for successful completion of the course."),
+        display_name=_("Certificate Name (Short)"),
         scope=Scope.settings,
         default=""
     )
     cert_name_long = String(
-        help="Sitewide name of completion statements given to students (long).",
+        help=_("Between quotation marks, enter the long name of the certificate that is given to students for successful completion of the course."),
+        display_name=_("Certificate Name (Long)"),
         scope=Scope.settings,
         default=""
     )
@@ -384,30 +487,55 @@ class CourseFields(object):
     # way to add in course-specific styling. There needs to be a discussion
     # about the right way to do this, but arjun will address this ASAP. Also
     # note that the courseware template needs to change when this is removed.
-    css_class = String(help="DO NOT USE THIS", scope=Scope.settings, default="")
+    css_class = String(
+        display_name=_("CSS Class for Course Reruns"),
+        help=_("Allows courses to share the same css class across runs even if they have different numbers. NOTE: This property is not supported."),
+        scope=Scope.settings, default="",
+        deprecated=True
+    )
 
     # TODO: This is a quick kludge to allow CS50 (and other courses) to
     # specify their own discussion forums as external links by specifying a
     # "discussion_link" in their policy JSON file. This should later get
     # folded in with Syllabus, Course Info, and additional Custom tabs in a
     # more sensible framework later.
-    discussion_link = String(help="DO NOT USE THIS", scope=Scope.settings)
+    discussion_link = String(
+        display_name=_("Discussion Forum External Link"),
+        help=_("Allows specification of external link to replace discussion forums. NOTE: this property is not supported."),
+        scope=Scope.settings,
+        deprecated=True
+    )
 
     # TODO: same as above, intended to let internal CS50 hide the progress tab
     # until we get grade integration set up.
     # Explicit comparison to True because we always want to return a bool.
-    hide_progress_tab = Boolean(help="DO NOT USE THIS", scope=Scope.settings)
+    hide_progress_tab = Boolean(
+        display_name=_("Hide Progress Tab"),
+        help=_("Allows hiding of the progress tab. NOTE: this property is not supported."),
+        scope=Scope.settings,
+        deprecated=True
+    )
 
-    display_organization = String(help="An optional display string for the course organization that will get rendered in the LMS",
-                                  scope=Scope.settings)
+    display_organization = String(
+        display_name=_("Course Organization Display String"),
+        help=_("Enter a course organization to be displayed in the LMS, to override the organization you entered when creating the course. Enter null to use the actual course organization."),
+        scope=Scope.settings
+    )
 
-    display_coursenumber = String(help="An optional display string for the course number that will get rendered in the LMS",
-                                  scope=Scope.settings)
+    display_coursenumber = String(
+        display_name=_("Course Number Display String"),
+        help=_("Enter a course number to be displayed in the LMS, to override the number you entered when creating the course. Enter null to display the actual course number."),
+        scope=Scope.settings
+    )
 
-    max_student_enrollments_allowed = Integer(help="Limit the number of students allowed to enroll in this course.",
-                                              scope=Scope.settings)
+    max_student_enrollments_allowed = Integer(
+        display_name=_("Course Maximum Student Enrollment"),
+        help=_("Enter the total number of students allowed to enroll in the course. Enter null to allow an unlimited number of students."),
+        scope=Scope.settings
+    )
 
-    allow_public_wiki_access = Boolean(help="Whether to allow an unenrolled user to view the Wiki",
+    allow_public_wiki_access = Boolean(display_name=_("Allow Public Wiki Access"),
+                                       help=_("Enter true or false. If true, unenrolled users can view the course Wiki."),
                                        default=False,
                                        scope=Scope.settings)
 
