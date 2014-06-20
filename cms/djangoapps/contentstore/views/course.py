@@ -12,7 +12,7 @@ from django.conf import settings
 from django.views.decorators.http import require_http_methods
 from django.core.exceptions import PermissionDenied
 from django.core.urlresolvers import reverse
-from django.http import HttpResponseBadRequest, HttpResponseNotFound
+from django.http import HttpResponseBadRequest, HttpResponseNotFound, Http404
 from util.json_request import JsonResponse
 from edxmako.shortcuts import render_to_response
 
@@ -44,7 +44,8 @@ from .access import has_course_access
 from .component import (
     OPEN_ENDED_COMPONENT_TYPES,
     NOTE_COMPONENT_TYPES,
-    ADVANCED_COMPONENT_POLICY_KEY
+    ADVANCED_COMPONENT_POLICY_KEY,
+    SPLIT_TEST_COMPONENT_TYPE
 )
 
 from django_comment_common.models import assign_default_role
@@ -65,7 +66,8 @@ __all__ = ['course_info_handler', 'course_handler', 'course_info_update_handler'
            'settings_handler',
            'grading_handler',
            'advanced_settings_handler',
-           'textbooks_list_handler', 'textbooks_detail_handler']
+           'textbooks_list_handler', 'textbooks_detail_handler',
+           'group_configurations_list_handler']
 
 
 class AccessListFallback(Exception):
@@ -852,6 +854,31 @@ def textbooks_detail_handler(request, course_key_string, textbook_id):
         course_module.pdf_textbooks = remaining_textbooks
         store.update_item(course_module, request.user.id)
         return JsonResponse()
+
+
+@require_http_methods(("GET"))
+@login_required
+@ensure_csrf_cookie
+def group_configurations_list_handler(request, course_key_string):
+    """
+    A RESTful handler for Group Configurations
+
+    GET
+        html: return Group Configurations list page (Backbone application)
+    """
+    course_key = CourseKey.from_string(course_key_string)
+    course = _get_course_module(course_key, request.user)
+    group_configuration_url = reverse_course_url('group_configurations_list_handler', course_key)
+    res = {
+        'context_course': course,
+        'group_configuration_url': group_configuration_url,
+    }
+    if SPLIT_TEST_COMPONENT_TYPE not in course.advanced_modules:
+       res['configurations'] = None
+    else:
+        user_partitions = [user_partition.to_json() for user_partition in course.user_partitions]
+        res['configurations'] = user_partitions
+    return render_to_response('group_configurations.html', res)
 
 
 def _get_course_creator_status(user):
