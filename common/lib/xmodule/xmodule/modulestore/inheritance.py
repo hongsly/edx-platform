@@ -66,7 +66,7 @@ class InheritanceMixin(XBlockMixin):
     )
     xqa_key = String(
         display_name=_("XQA Key"),
-        help=_("For integration with Ike's content QA server. NOTE: this property is not supported."), scope=Scope.settings,
+        help=_("For integration with Ike's content QA server."), scope=Scope.settings,
         deprecated=True
     )
     annotation_storage_url = String(

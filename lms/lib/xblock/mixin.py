@@ -23,29 +23,29 @@ class LmsBlockMixin(XBlockMixin):
     )
     chrome = String(
         display_name=_("Courseware Chrome"),
-        help=_("Which chrome to show. Options: \n"
-             "chromeless -- No chrome\n"
-             "tabs -- just tabs\n"
-             "accordion -- just accordion\n"
-             "tabs,accordion -- Full Chrome"),
+        help=_("Enter the chrome, or navigation tools, to use for the XBlock in the LMS. Valid values are: \n"
+             "chromeless -- To not use tabs or the accordion\n"
+             "tabs -- To use tabs only\n"
+             "accordion -- To use the accordion only\n"
+             "tabs,accordion -- To use tabs and the accorion"),
         scope=Scope.settings,
         default=None,
     )
     default_tab = String(
         display_name=_("Default Tab"),
-        help=_("Override which tab is selected. If not set, courseware tab is shown."),
+        help=_("Enter the tab that is selected in the XBlock. If not set, the Courseware tab is shown."),
         scope=Scope.settings,
         default=None,
     )
     source_file = String(
         display_name=_("LaTeX Source File Name"),
-        help=_("Source file name for LaTeX"),
+        help=_("Enter the source file name for LaTeX."),
         scope=Scope.settings,
         deprecated=True
     )
     ispublic = Boolean(
         display_name=_("Course Is Public"),
-        help=_("Whether this course is open to the public, or only to admins"),
+        help=_("Enter true or false. If true, the course is open to the public. If false, the course is open only to admins."),
         scope=Scope.settings,
         deprecated=True
     )

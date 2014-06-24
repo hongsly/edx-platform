@@ -489,7 +489,7 @@ class CourseFields(object):
     # note that the courseware template needs to change when this is removed.
     css_class = String(
         display_name=_("CSS Class for Course Reruns"),
-        help=_("Allows courses to share the same css class across runs even if they have different numbers. NOTE: This property is not supported."),
+        help=_("Allows courses to share the same css class across runs even if they have different numbers."),
         scope=Scope.settings, default="",
         deprecated=True
     )
@@ -501,7 +501,7 @@ class CourseFields(object):
     # more sensible framework later.
     discussion_link = String(
         display_name=_("Discussion Forum External Link"),
-        help=_("Allows specification of external link to replace discussion forums. NOTE: this property is not supported."),
+        help=_("Allows specification of external link to replace discussion forums."),
         scope=Scope.settings,
         deprecated=True
     )
@@ -511,7 +511,7 @@ class CourseFields(object):
     # Explicit comparison to True because we always want to return a bool.
     hide_progress_tab = Boolean(
         display_name=_("Hide Progress Tab"),
-        help=_("Allows hiding of the progress tab. NOTE: this property is not supported."),
+        help=_("Allows hiding of the progress tab."),
         scope=Scope.settings,
         deprecated=True
     )
