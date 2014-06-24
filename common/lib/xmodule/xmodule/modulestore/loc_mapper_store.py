@@ -9,7 +9,6 @@ import urllib
 
 from xmodule.modulestore.exceptions import ItemNotFoundError
 from opaque_keys.edx.locator import BlockUsageLocator, CourseLocator
-from opaque_keys.edx.locations import SlashSeparatedCourseKey
 
 
 class LocMapperStore(object):

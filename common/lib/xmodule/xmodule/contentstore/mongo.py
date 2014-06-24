@@ -14,7 +14,6 @@ import os
 import json
 import bson.son
 from bson.son import SON
-from opaque_keys.edx.locations import AssetLocation
 
 
 class MongoContentStore(ContentStore):

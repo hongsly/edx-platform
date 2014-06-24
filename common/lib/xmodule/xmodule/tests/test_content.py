@@ -1,7 +1,6 @@
 import unittest
 from xmodule.contentstore.content import StaticContent
 from xmodule.contentstore.content import ContentStore
-from opaque_keys.edx.locations import AssetLocation
 from opaque_keys.edx.keys import CourseKey
 
 

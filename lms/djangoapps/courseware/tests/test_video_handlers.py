@@ -21,7 +21,6 @@ from xmodule.video_module.transcripts_utils import (
     TranscriptException,
     TranscriptsGenerationException,
 )
-from opaque_keys.edx.locations import AssetLocation
 
 SRT_content = textwrap.dedent("""
         0
