@@ -236,16 +236,14 @@ class FieldDataCache(object):
             return field_object
 
         if key.scope == Scope.user_state:
-            # When we start allowing block_scope_ids to be either Locations or Locators,
-            # this assertion will fail. Fix the code here when that happens!
-            assert(isinstance(key.block_scope_id, Location))
+            assert(isinstance(key.block_scope_id, UsageKey))
             field_object, _ = StudentModule.objects.get_or_create(
                 course_id=self.course_id,
                 student=User.objects.get(id=key.user_id),
                 module_state_key=key.block_scope_id,
                 defaults={
                     'state': json.dumps({}),
-                    'module_type': key.block_scope_id.category,
+                    'module_type': key.block_scope_id.block_type,
                 },
             )
         elif key.scope == Scope.user_state_summary:

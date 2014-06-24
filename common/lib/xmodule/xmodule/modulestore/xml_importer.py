@@ -1,21 +1,23 @@
 import logging
 import os
 import mimetypes
-from path import path
 import json
+from path import path
 
-from .xml import XMLModuleStore, ImportSystem, ParentTracker
-from xblock.runtime import KvsFieldData, DictKeyValueStore
-from xmodule.x_module import XModuleDescriptor
+import xblock
+from opaque_keys import InvalidKeyError
 from opaque_keys.edx.keys import UsageKey
 from xblock.fields import Scope, Reference, ReferenceList, ReferenceValueDict
+from xblock.runtime import KvsFieldData, DictKeyValueStore
+
 from xmodule.contentstore.content import StaticContent
-from .inheritance import own_metadata
 from xmodule.errortracker import make_error_tracker
-from .store_utilities import rewrite_nonportable_content_links
-import xblock
+from xmodule.x_module import XModuleDescriptor
 from xmodule.tabs import CourseTabList
-from xmodule.modulestore.exceptions import InvalidLocationError
+
+from .inheritance import own_metadata
+from .store_utilities import rewrite_nonportable_content_links
+from .xml import XMLModuleStore, ImportSystem, ParentTracker
 
 log = logging.getLogger(__name__)
 
@@ -176,7 +178,7 @@ def import_from_xml(
             else:
                 try:
                     store.create_course(dest_course_id.org, dest_course_id.course, dest_course_id.run)
-                except InvalidLocationError:
+                except InvalidKeyError:
                     # course w/ same org and course exists and store is old mongo
                     log.debug(
                         "Skipping import of course with id, {0},"
@@ -783,7 +785,7 @@ def _update_module_location(module, new_location):
 
     Args:
         module (XModuleMixin): The module to update.
-        new_location (Location): The new location of the module.
+        new_location (UsageKey): The new usage_key of the module.
 
     Returns:
         None

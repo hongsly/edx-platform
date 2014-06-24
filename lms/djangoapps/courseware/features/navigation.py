@@ -156,7 +156,7 @@ def create_user_and_visit_course():
 
 def add_problem_to_course_section(parent_location, display_name):
     """
-    Add a problem to the course at `parent_location` (a `Location` instance)
+    Add a problem to the course at `parent_location` (a `UsageKey` instance)
 
     `display_name` is the name of the problem to display, which
     is useful to identify which problem we're looking at.

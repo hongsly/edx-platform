@@ -42,7 +42,7 @@ class UserProfileFactory(StudentUserProfileFactory):
 
 class InstructorFactory(UserFactory):
     """
-    Given a course Location, returns a User object with instructor
+    Given a CourseKey, returns a User object with instructor
     permissions for `course`.
     """
     last_name = "Instructor"
@@ -56,7 +56,7 @@ class InstructorFactory(UserFactory):
 
 class StaffFactory(UserFactory):
     """
-    Given a course Location, returns a User object with staff
+    Given a CourseKey, returns a User object with staff
     permissions for `course`.
     """
     last_name = "Staff"
@@ -70,7 +70,7 @@ class StaffFactory(UserFactory):
 
 class BetaTesterFactory(UserFactory):
     """
-    Given a course Location, returns a User object with beta-tester
+    Given a CourseKey, returns a User object with beta-tester
     permissions for `course`.
     """
     last_name = "Beta-Tester"
@@ -84,7 +84,7 @@ class BetaTesterFactory(UserFactory):
 
 class OrgStaffFactory(UserFactory):
     """
-    Given a course Location, returns a User object with org-staff
+    Given a CourseKey, returns a User object with org-staff
     permissions for `course`.
     """
     last_name = "Org-Staff"
@@ -98,7 +98,7 @@ class OrgStaffFactory(UserFactory):
 
 class OrgInstructorFactory(UserFactory):
     """
-    Given a course Location, returns a User object with org-instructor
+    Given a CourseKey, returns a User object with org-instructor
     permissions for `course`.
     """
     last_name = "Org-Instructor"

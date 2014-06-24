@@ -28,7 +28,7 @@ class SplitMigrator(object):
 
         If the new course already exists, this raises DuplicateItemError
 
-        :param course_location: a Location whose category is 'course' and points to the course
+        :param course_key: a CourseKey
         :param user: the user whose action is causing this migration
         :param new_org: (optional) the Locator.org for the new course. Defaults to
             whatever translate_location_to_locator returns

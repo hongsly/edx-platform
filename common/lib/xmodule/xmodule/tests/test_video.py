@@ -19,7 +19,7 @@ from mock import Mock
 
 from . import LogicTest
 from lxml import etree
-from opaque_keys.edx.locations import Location
+from opaque_keys.edx.keys import UsageKey
 from xmodule.video_module import VideoDescriptor, create_youtube_string
 from .test_import import DummySystem
 from xblock.field_data import DictFieldData
@@ -113,7 +113,7 @@ class VideoDescriptorTest(unittest.TestCase):
 
     def setUp(self):
         system = get_test_descriptor_system()
-        location = Location('org', 'course', 'run', 'video', 'name', None)
+        location = UsageKey.from_string('i4x://org/course/video/name')
         self.descriptor = system.construct_xblock_from_class(
             VideoDescriptor,
             scope_ids=ScopeIds(None, None, location, location),
@@ -126,7 +126,7 @@ class VideoDescriptorTest(unittest.TestCase):
         back out to XML.
         """
         system = DummySystem(load_error_modules=True)
-        location = Location("edX", 'course', 'run', "video", 'SampleProblem1', None)
+        location = UsageKey.from_string('i4x://edX/course/video/SampleProblem1')
         field_data = DictFieldData({'location': location})
         descriptor = VideoDescriptor(system, field_data, Mock())
         descriptor.youtube_id_0_75 = 'izygArpw-Qo'
@@ -142,7 +142,7 @@ class VideoDescriptorTest(unittest.TestCase):
         in the output string.
         """
         system = DummySystem(load_error_modules=True)
-        location = Location("edX", 'course', 'run', "video", "SampleProblem1", None)
+        location = UsageKey.from_string('i4x://edX/course/video/SampleProblem1')
         field_data = DictFieldData({'location': location})
         descriptor = VideoDescriptor(system, field_data, Mock())
         descriptor.youtube_id_0_75 = 'izygArpw-Qo'
@@ -182,7 +182,7 @@ class VideoDescriptorImportTestCase(unittest.TestCase):
               <transcript language="ge" src="german_translation.srt" />
             </video>
         '''
-        location = Location("edX", 'course', 'run', "video", "SampleProblem1", None)
+        location = UsageKey.from_string('i4x://edX/course/video/SampleProblem1')
         field_data = DictFieldData({
             'data': sample_xml,
             'location': location
@@ -486,7 +486,7 @@ class VideoExportTestCase(unittest.TestCase):
     correctly.
     """
     def setUp(self):
-        self.location = Location("edX", 'course', 'run', "video", "SampleProblem1", None)
+        self.location = UsageKey.from_string('i4x://edX/course/video/SampleProblem1')
 
     def assertXmlEqual(self, expected, xml):
         for attr in ['tag', 'attrib', 'text', 'tail']:

@@ -1053,7 +1053,7 @@ class DescriptorSystem(MetricsMixin, ConfigurableFragmentWrapper, Runtime):  # p
         self, load_item, resources_fs, error_tracker, get_policy=None, **kwargs
     ):
         """
-        load_item: Takes a Location and returns an XModuleDescriptor
+        load_item: Takes a UsageKey and returns an XModuleDescriptor
 
         resources_fs: A Filesystem object that contains all of the
             resources needed for the course

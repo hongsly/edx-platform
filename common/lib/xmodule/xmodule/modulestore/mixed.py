@@ -11,7 +11,6 @@ from opaque_keys import InvalidKeyError
 
 from . import ModuleStoreWriteBase
 from xmodule.modulestore.django import create_modulestore_instance, loc_mapper
-from opaque_keys.edx.locations import Location
 from xmodule.modulestore import XML_MODULESTORE_TYPE
 from opaque_keys.edx.locator import CourseLocator, Locator, BlockUsageLocator
 from xmodule.modulestore.exceptions import ItemNotFoundError
@@ -109,7 +108,7 @@ class MixedModuleStore(ModuleStoreWriteBase):
                 Common qualifiers are ``category`` or any field name. if the target field is a list,
                 then it searches for the given value in the list not list equivalence.
                 Substring matching pass a regex object.
-                For some modulestores, ``name`` is another commonly provided key (Location based stores)
+                For some modulestores, ``name`` is another commonly provided key
                 For some modulestores,
                 you can search by ``edited_by``, ``edited_on`` providing either a datetime for == (probably
                 useless) or a function accepting one arg to do inequality
@@ -138,7 +137,7 @@ class MixedModuleStore(ModuleStoreWriteBase):
             for course in store_courses:
                 course_location = unicode(course.location)
                 if course_location not in courses:
-                    if has_locators and isinstance(course.location, Location):
+                    if has_locators and course.location.deprecated:
                         # see if a locator version of course is in the result
                         try:
                             # if there's no existing mapping, then the course can't have been in split

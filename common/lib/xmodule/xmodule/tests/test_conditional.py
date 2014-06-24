@@ -8,7 +8,6 @@ from xblock.field_data import DictFieldData
 from xblock.fields import ScopeIds
 from xmodule.error_module import NonStaffErrorDescriptor
 from opaque_keys.edx.keys import UsageKey, CourseKey
-from opaque_keys.edx.locations import Location
 from xmodule.modulestore.xml import ImportSystem, XMLModuleStore, CourseLocationGenerator
 from xmodule.conditional_module import ConditionalDescriptor
 from xmodule.tests import DATA_DIR, get_test_system, get_test_descriptor_system
@@ -54,7 +53,7 @@ class ConditionalFactory(object):
         descriptor_system = get_test_descriptor_system()
 
         # construct source descriptor and module:
-        source_location = Location("edX", "conditional_test", "test_run", "problem", "SampleProblem", None)
+        source_location = UsageKey.from_string('i4x://edX/conditional_test/problem/SampleProblem')
         if source_is_error_module:
             # Make an error descriptor and module
             source_descriptor = NonStaffErrorDescriptor.from_xml(
@@ -86,7 +85,7 @@ class ConditionalFactory(object):
         }.get
 
         # construct conditional module:
-        cond_location = Location("edX", "conditional_test", "test_run", "conditional", "SampleConditional", None)
+        cond_location = UsageKey.from_string('i4x://edX/conditional_test/conditional/SampleConditional')
         field_data = DictFieldData({
             'data': '<conditional/>',
             'xml_attributes': {'attempted': 'true'},
@@ -199,7 +198,7 @@ class ConditionalModuleXmlTest(unittest.TestCase):
         print "id: ", course.id
 
         def inner_get_module(descriptor):
-            if isinstance(descriptor, Location):
+            if isinstance(descriptor, UsageKey):
                 location = descriptor
                 descriptor = self.modulestore.get_item(location, depth=None)
             descriptor.xmodule_runtime = get_test_system()
@@ -208,8 +207,7 @@ class ConditionalModuleXmlTest(unittest.TestCase):
 
         # edx - HarvardX
         # cond_test - ER22x
-        location = Location("HarvardX", "ER22x", "2013_Spring", "conditional", "condone")
-
+        location = UsageKey.from_string('i4x://HarvardX/ER22x/conditional/condone'
         def replace_urls(text, staticfiles_prefix=None, replace_prefix='/static/', course_namespace=None):
             return text
         self.test_system.replace_urls = replace_urls
@@ -261,7 +259,7 @@ class ConditionalModuleXmlTest(unittest.TestCase):
         via generating UsageKeys from the values in xml_attributes['sources']
         """
         dummy_system = Mock()
-        dummy_location = Location("edX", "conditional_test", "test_run", "conditional", "SampleConditional", None)
+        dummy_location = UsageKey.from_string('i4x://edX/conditional_test/conditional/SampleConditional')
         dummy_scope_ids = ScopeIds(None, None, dummy_location, dummy_location)
         dummy_field_data = DictFieldData({
             'data': '<conditional/>',
@@ -280,7 +278,7 @@ class ConditionalModuleXmlTest(unittest.TestCase):
 
     def test_conditional_module_parse_sources(self):
         dummy_system = Mock()
-        dummy_location = Location("edX", "conditional_test", "test_run", "conditional", "SampleConditional", None)
+        dummy_location = UsageKey.from_string('i4x://edX/conditional_test/conditional/SampleConditional')
         dummy_scope_ids = ScopeIds(None, None, dummy_location, dummy_location)
         dummy_field_data = DictFieldData({
             'data': '<conditional/>',

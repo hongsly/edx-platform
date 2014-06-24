@@ -95,7 +95,7 @@ class SplitTestFields(object):
     )
 
     # group_id is an int
-    # child is a serialized UsageId (aka Location).  This child
+    # child is a serialized UsageId. This child
     # location needs to actually match one of the children of this
     # Block.  (expected invariant that we'll need to test, and handle
     # authoring tools that mess this up)

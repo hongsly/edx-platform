@@ -19,13 +19,12 @@ from xblock.exceptions import InvalidScopeError
 from xblock.plugin import Plugin
 
 from xmodule.tests import DATA_DIR
-from opaque_keys.edx.locations import Location
 from xmodule.modulestore import MONGO_MODULESTORE_TYPE
 from xmodule.modulestore.mongo import MongoModuleStore, MongoKeyValueStore
 from xmodule.modulestore.draft import DraftModuleStore
 from xmodule.modulestore.mongo.draft import as_draft
-from opaque_keys.edx.locations import AssetLocation
-from opaque_keys.edx.keys import CourseKey
+from opaque_keys.edx.keys import CourseKey, UsageKey, AssetKey
+from opaque_keys.edx.locator import AssetLocator, CourseLocator
 from xmodule.modulestore.xml_exporter import export_to_xml
 from xmodule.modulestore.xml_importer import import_from_xml, perform_xlint
 from xmodule.contentstore.mongo import MongoContentStore
@@ -190,15 +189,15 @@ class TestMongoModuleStore(unittest.TestCase):
 
     def test_loads(self):
         assert_not_none(
-            self.store.get_item(Location('edX', 'toy', '2012_Fall', 'course', '2012_Fall'))
+            self.store.get_item(UsageKey.from_string('i4x://edX/toy/course/2012_Fall'))
         )
 
         assert_not_none(
-            self.store.get_item(Location('edX', 'simple', '2012_Fall', 'course', '2012_Fall')),
+            self.store.get_item(UsageKey.from_string('i4x://edX/simple/course/2012_Fall')),
         )
 
         assert_not_none(
-            self.store.get_item(Location('edX', 'toy', '2012_Fall', 'video', 'Welcome')),
+            self.store.get_item(UsageKey.from_string('i4x://edX/toy/video/Welcome')),
         )
 
     def test_unicode_loads(self):
@@ -206,31 +205,31 @@ class TestMongoModuleStore(unittest.TestCase):
         Test that getting items from the test_unicode course works
         """
         assert_not_none(
-            self.store.get_item(Location('edX', 'test_unicode', '2012_Fall', 'course', '2012_Fall')),
+            self.store.get_item(UsageKey.from_string('i4x://edX/test_unicode/course/2012_Fall')),
         )
         # All items with ascii-only filenames should load properly.
         assert_not_none(
-            self.store.get_item(Location('edX', 'test_unicode', '2012_Fall', 'video', 'Welcome')),
+            self.store.get_item(UsageKey.from_string('i4x://edX/test_unicode/video/Welcome')),
         )
         assert_not_none(
-            self.store.get_item(Location('edX', 'test_unicode', '2012_Fall', 'video', 'Welcome')),
+            self.store.get_item(UsageKey.from_string('i4x://edX/test_unicode/video/Welcome')),
         )
         assert_not_none(
-            self.store.get_item(Location('edX', 'test_unicode', '2012_Fall', 'chapter', 'Overview')),
+            self.store.get_item(UsageKey.from_string('i4x://edX/test_unicode/chapter/Overview')),
         )
 
 
     def test_find_one(self):
         assert_not_none(
-            self.store._find_one(Location('edX', 'toy', '2012_Fall', 'course', '2012_Fall')),
+            self.store._find_one(UsageKey.from_string('i4x://edX/toy/course/2012_Fall')),
         )
 
         assert_not_none(
-            self.store._find_one(Location('edX', 'simple', '2012_Fall', 'course', '2012_Fall')),
+            self.store._find_one(UsageKey.from_string('i4x://edX/simple/course/2012_Fall')),
         )
 
         assert_not_none(
-            self.store._find_one(Location('edX', 'toy', '2012_Fall', 'video', 'Welcome')),
+            self.store._find_one(UsageKey.from_string('i4x://edX/toy/video/Welcome')),
         )
 
     def test_path_to_location(self):
@@ -275,13 +274,13 @@ class TestMongoModuleStore(unittest.TestCase):
         """
         Test getting, setting, and defaulting the locked attr and arbitrary attrs.
         """
-        location = Location('edX', 'toy', '2012_Fall', 'course', '2012_Fall')
-        course_content, __ = TestMongoModuleStore.content_store.get_all_content_for_course(location.course_key)
+        course_key = CourseKey.from_string('edX/toy/2012_Fall')
+        course_content, __ = TestMongoModuleStore.content_store.get_all_content_for_course(course_key)
         assert_true(len(course_content) > 0)
         # a bit overkill, could just do for content[0]
         for content in course_content:
             assert not content.get('locked', False)
-            asset_key = AssetLocation._from_deprecated_son(content['_id'], location.run)
+            asset_key = AssetLocator._from_deprecated_son(content['_id'], course_key.run)
             assert not TestMongoModuleStore.content_store.get_attr(asset_key, 'locked', False)
             attrs = TestMongoModuleStore.content_store.get_attrs(asset_key)
             assert_in('uploadDate', attrs)
@@ -294,7 +293,7 @@ class TestMongoModuleStore(unittest.TestCase):
             TestMongoModuleStore.content_store.set_attrs(asset_key, {'miscel': 99})
             assert_equals(TestMongoModuleStore.content_store.get_attr(asset_key, 'miscel'), 99)
 
-        asset_key = AssetLocation._from_deprecated_son(course_content[0]['_id'], location.run)
+        asset_key = AssetLocator._from_deprecated_son(course_content[0]['_id'], course_key.run)
         assert_raises(
             AttributeError, TestMongoModuleStore.content_store.set_attr, asset_key,
             'md5', 'ff1532598830e3feac91c2449eaa60d6'
@@ -305,26 +304,26 @@ class TestMongoModuleStore(unittest.TestCase):
         )
         assert_raises(
             NotFoundError, TestMongoModuleStore.content_store.get_attr,
-            Location('bogus', 'bogus', 'bogus', 'asset', 'bogus'),
+            AssetKey.from_string('c4x/bogus/bogus/asset/bogus'),
             'displayname'
         )
         assert_raises(
             NotFoundError, TestMongoModuleStore.content_store.set_attr,
-            Location('bogus', 'bogus', 'bogus', 'asset', 'bogus'),
+            AssetKey.from_string('c4x/bogus/bogus/asset/bogus'),
             'displayname', 'hello'
         )
         assert_raises(
             NotFoundError, TestMongoModuleStore.content_store.get_attrs,
-            Location('bogus', 'bogus', 'bogus', 'asset', 'bogus')
+            AssetKey.from_string('c4x/bogus/bogus/asset/bogus')
         )
         assert_raises(
             NotFoundError, TestMongoModuleStore.content_store.set_attrs,
-            Location('bogus', 'bogus', 'bogus', 'asset', 'bogus'),
+            AssetKey.from_string('c4x/bogus/bogus/asset/bogus'),
             {'displayname': 'hello'}
         )
         assert_raises(
             NotFoundError, TestMongoModuleStore.content_store.set_attrs,
-            Location('bogus', 'bogus', 'bogus', 'asset', None),
+            AssetLocator(CourseLocator('bogus', 'bogus', 'bogus'), 'asset', None),
             {'displayname': 'hello'}
         )
 
@@ -335,7 +334,7 @@ class TestMongoModuleStore(unittest.TestCase):
         for course_number in self.courses:
             course_locations = self.store.get_courses_for_wiki(course_number)
             assert_equals(len(course_locations), 1)
-            assert_equals(Location('edX', course_number, '2012_Fall', 'course', '2012_Fall'), course_locations[0])
+            assert_equals(UsageKey.from_string('i4x://edX/{}/course/2012_Fall'.format(course_number)), course_locations[0])
 
         course_locations = self.store.get_courses_for_wiki('no_such_wiki')
         assert_equals(len(course_locations), 0)
@@ -353,7 +352,7 @@ class TestMongoModuleStore(unittest.TestCase):
         course_locations = self.store.get_courses_for_wiki('simple')
         assert_equals(len(course_locations), 2)
         for course_number in ['toy', 'simple']:
-            assert_in(Location('edX', course_number, '2012_Fall', 'course', '2012_Fall'), course_locations)
+            assert_in(UsageKey.from_string('i4x://edX/{}/course/2012_Fall'.format(course_number)), course_locations)
 
         # configure simple course to use unique wiki_slug.
         simple_course = self.store.get_course(CourseKey.from_string('edX/simple/2012_Fall'))
@@ -362,7 +361,7 @@ class TestMongoModuleStore(unittest.TestCase):
         # it should be retrievable with its new wiki_slug
         course_locations = self.store.get_courses_for_wiki('edX.simple.2012_Fall')
         assert_equals(len(course_locations), 1)
-        assert_in(Location('edX', 'simple', '2012_Fall', 'course', '2012_Fall'), course_locations)
+        assert_in(UsageKey.from_string('i4x://edX/simple/course/2012_Fall'), course_locations)
 
     @Plugin.register_temp_plugin(ReferenceTestXBlock, 'ref_test')
     def test_reference_converters(self):
@@ -389,20 +388,20 @@ class TestMongoModuleStore(unittest.TestCase):
         def check_xblock_fields():
             def check_children(xblock):
                 for child in xblock.children:
-                    assert_is_instance(child, Location)
+                    assert_is_instance(child, UsageKey)
 
             course = self.store.get_course(course_key)
             check_children(course)
 
             refele = self.store.get_item(self.refloc)
             check_children(refele)
-            assert_is_instance(refele.reference_link, Location)
+            assert_is_instance(refele.reference_link, UsageKey)
             assert_greater(len(refele.reference_list), 0)
             for ref in refele.reference_list:
-                assert_is_instance(ref, Location)
+                assert_is_instance(ref, UsageKey)
             assert_greater(len(refele.reference_dict), 0)
             for ref in refele.reference_dict.itervalues():
-                assert_is_instance(ref, Location)
+                assert_is_instance(ref, UsageKey)
 
         def check_mongo_fields():
             def get_item(location):
@@ -479,8 +478,8 @@ class TestMongoModuleStore(unittest.TestCase):
         """
         Tests that has_changes() returns false when an xblock in a direct only category is checked
         """
-        course_location = Location('edx', 'direct', '2012_Fall', 'course', 'test_course')
-        chapter_location = Location('edx', 'direct', '2012_Fall', 'chapter', 'test_chapter')
+        course_location = UsageKey.from_string('i4x://edx/direct/2012_Fall/course/test_course')
+        chapter_location = UsageKey.from_string('i4x://edx/direct/2012_Fall/chapter/test_chapter')
         dummy_user = 123
 
         # Create dummy direct only xblocks
@@ -495,7 +494,7 @@ class TestMongoModuleStore(unittest.TestCase):
         """
         Tests that has_changes() only returns true when changes are present
         """
-        location = Location('edX', 'changes', '2012_Fall', 'vertical', 'test_vertical')
+        location = UsageKey.from_string('i4x://edX/changes/2012_Fall/vertical/test_vertical')
         dummy_user = 123
 
         # Create a dummy component to test against
@@ -522,7 +521,7 @@ class TestMongoModuleStore(unittest.TestCase):
         """
         Tests that edited_on and edited_by are set correctly during an update
         """
-        location = Location('edX', 'editInfoTest', '2012_Fall', 'html', 'test_html')
+        location = UsageKey.from_string('i4x://edX/editInfoTest/2012_Fall/html/test_html')
         dummy_user = 123
 
         # Create a dummy component to test against
@@ -546,7 +545,7 @@ class TestMongoModuleStore(unittest.TestCase):
         """
         Tests that published_date and published_by are set correctly
         """
-        location = Location('edX', 'publishInfo', '2012_Fall', 'html', 'test_html')
+        location = UsageKey.from_string('i4x://edX/publishInfo/2012_Fall/html/test_html')
         create_user = 123
         publish_user = 456
 
@@ -568,7 +567,7 @@ class TestMongoModuleStore(unittest.TestCase):
         """
 
         # Insert the test block directly into the module store
-        location = Location('edX', 'migration', '2012_Fall', 'html', 'test_html')
+        location = UsageKey.from_string('i4x://edX/migration/2012_Fall/html/test_html')
         published_date = datetime(1970, 1, 1, tzinfo=UTC)
         published_by = 123
         self.store._update_single_item(

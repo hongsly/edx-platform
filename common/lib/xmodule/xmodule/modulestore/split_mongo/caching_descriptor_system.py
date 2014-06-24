@@ -31,7 +31,7 @@ class CachingDescriptorSystem(MakoDescriptorSystem):
         Callers to _load_item provide an override but that function ignores the provided structure and
         only looks at the branch and course id
 
-        module_data: a dict mapping Location -> json that was cached from the
+        module_data: a dict mapping UsageKeys -> json that was cached from the
             underlying modulestore
         """
         super(CachingDescriptorSystem, self).__init__(

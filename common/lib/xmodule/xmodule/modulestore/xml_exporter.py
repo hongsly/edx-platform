@@ -4,10 +4,10 @@ Methods for exporting course data to XML
 
 import logging
 import lxml.etree
+from opaque_keys.edx.keys import UsageKey
 from xblock.fields import Scope
 from xmodule.contentstore.content import StaticContent
 from xmodule.exceptions import NotFoundError
-from opaque_keys.edx.locations import Location
 from xmodule.modulestore.inheritance import own_metadata
 from fs.osfs import OSFS
 from json import dumps
@@ -27,13 +27,13 @@ DEFAULT_CONTENT_FIELDS = ['metadata', 'data']
 
 class EdxJSONEncoder(json.JSONEncoder):
     """
-    Custom JSONEncoder that handles `Location` and `datetime.datetime` objects.
+    Custom JSONEncoder that handles `UsageKey` and `datetime.datetime` objects.
 
-    `Location`s are encoded as their url string form, and `datetime`s as
+    `UsageKey`s are encoded as their url string form, and `datetime`s as
     ISO date strings
     """
     def default(self, obj):
-        if isinstance(obj, Location):
+        if isinstance(obj, UsageKey):
             return unicode(obj)
         elif isinstance(obj, datetime.datetime):
             if obj.tzinfo is not None:

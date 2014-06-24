@@ -1,5 +1,5 @@
 '''
-Method for converting among our differing Location/Locator whatever reprs
+Method for converting among our differing UsageKey formats
 '''
 from random import randint
 import re
@@ -7,7 +7,7 @@ import pymongo
 import bson.son
 import urllib
 
-from xmodule.modulestore.exceptions import InvalidLocationError, ItemNotFoundError
+from xmodule.modulestore.exceptions import ItemNotFoundError
 from opaque_keys.edx.locator import BlockUsageLocator, CourseLocator
 from opaque_keys.edx.locations import SlashSeparatedCourseKey
 
@@ -163,7 +163,7 @@ class LocMapperStore(object):
                     category = block_id.keys()[0]
                     block_id = block_id.values()[0]
                 else:
-                    raise InvalidLocationError()
+                    raise InvalidKeyError()
             elif category in block_id:
                 block_id = block_id[category]
             elif add_entry_if_missing:

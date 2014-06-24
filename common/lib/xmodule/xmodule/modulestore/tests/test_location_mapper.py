@@ -3,9 +3,8 @@ Test the loc mapper store
 """
 import unittest
 import uuid
-from opaque_keys.edx.locations import Location
 from opaque_keys.edx.locator import BlockUsageLocator, CourseLocator
-from xmodule.modulestore.exceptions import ItemNotFoundError, InvalidLocationError
+from xmodule.modulestore.exceptions import ItemNotFoundError
 from xmodule.modulestore.loc_mapper_store import LocMapperStore
 from mock import Mock
 from opaque_keys.edx.keys import CourseKey
@@ -181,7 +180,7 @@ class TestLocationMapper(LocMapperSetupSansDjango):
                 add_entry_if_missing=False
             )
         test_no_cat_locn = test_problem_locn.replace(category=None)
-        with self.assertRaises(InvalidLocationError):
+        with self.assertRaises(InvalidKeyError):
             loc_mapper().translate_location(
                 slash_course_key.make_usage_key(None, 'abc123'), test_no_cat_locn, False, False
             )

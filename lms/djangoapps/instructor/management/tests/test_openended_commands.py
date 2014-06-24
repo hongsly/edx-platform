@@ -8,7 +8,7 @@ from pytz import UTC
 from django.test.utils import override_settings
 
 import capa.xqueue_interface as xqueue_interface
-from opaque_keys.edx.locations import Location
+from opaque_keys.edx.keys import UsageKey
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.open_ended_grading_classes.openendedchild import OpenEndedChild
 from xmodule.tests.test_util_open_ended import (
@@ -33,7 +33,7 @@ class OpenEndedPostTest(ModuleStoreTestCase):
 
     def setUp(self):
         self.course_id = CourseKey.from_string("edX/open_ended/2012_Fall")
-        self.problem_location = Location("edX", "open_ended", "2012_Fall", "combinedopenended", "SampleQuestion")
+        self.problem_location = UsageKey.from_string('i4x://edX/open_ended/combinedopenended/SampleQuestion')
         self.self_assessment_task_number = 0
         self.open_ended_task_number = 1
 
@@ -129,7 +129,7 @@ class OpenEndedStatsTest(ModuleStoreTestCase):
 
     def setUp(self):
         self.course_id = CourseKey.from_string("edX/open_ended/2012_Fall")
-        self.problem_location = Location("edX", "open_ended", "2012_Fall", "combinedopenended", "SampleQuestion")
+        self.problem_location = UsageKey.from_string('i4x://edX/open_ended/combinedopenended/SampleQuestion')
         self.task_number = 1
         self.invalid_task_number = 3
 

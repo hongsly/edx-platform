@@ -5,7 +5,6 @@ from mock import patch, Mock
 from importlib import import_module
 
 from xmodule.tests import DATA_DIR
-from opaque_keys.edx.locations import Location
 from xmodule.modulestore import MONGO_MODULESTORE_TYPE, SPLIT_MONGO_MODULESTORE_TYPE, XML_MODULESTORE_TYPE
 from xmodule.modulestore.exceptions import ItemNotFoundError
 
@@ -162,7 +161,7 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
             course_id: course_key.make_usage_key('course', course_key.run)
             for course_id, course_key in self.course_locations.iteritems()  # pylint: disable=maybe-no-member
         }
-        self.fake_location = Location('foo', 'bar', 'slowly', 'vertical', 'baz')
+        self.fake_location = BlockUsageLocator(CourseLocator('foo', 'bar', 'slowly'), 'vertical', 'baz')
         self.import_chapter_location = self.course_locations[self.MONGO_COURSEID].replace(
             category='chapter', name='Overview'
         )

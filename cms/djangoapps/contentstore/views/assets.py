@@ -172,7 +172,7 @@ def _upload_asset(request, course_key):
 
     # compute a 'filename' which is similar to the location formatting, we're
     # using the 'filename' nomenclature since we're using a FileSystem paradigm
-    # here. We're just imposing the Location string formatting expectations to
+    # here. We're just imposing the AssetKey string formatting expectations to
     # keep things a bit more consistent
     upload_file = request.FILES['file']
     filename = upload_file.name

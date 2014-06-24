@@ -7,8 +7,7 @@ from webob.multidict import MultiDict
 from xblock.field_data import DictFieldData
 from xblock.fields import ScopeIds
 
-from opaque_keys.edx.locations import Location
-from opaque_keys.edx.keys import CourseKey
+from opaque_keys.edx.keys import CourseKey, UsageKey
 from xmodule.tests import get_test_system, get_test_descriptor_system
 from xmodule.tests.test_util_open_ended import DummyModulestore
 from xmodule.open_ended_grading_classes.peer_grading_service import MockPeerGradingService
@@ -150,7 +149,7 @@ class PeerGradingModuleTest(unittest.TestCase, DummyModulestore):
         # pylint: disable=protected-access
         with self.assertRaises(ItemNotFoundError):
             self.peer_grading._find_corresponding_module_for_location(
-                Location('org', 'course', 'run', 'category', 'name', 'revision')
+                UsageKey.from_string('i4x://org/course/category/name@revision')
             )
 
     def test_get_instance_state(self):

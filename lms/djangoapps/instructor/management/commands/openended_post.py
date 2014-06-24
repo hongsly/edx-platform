@@ -20,7 +20,7 @@ class Command(BaseCommand):
     Command to manually re-post open ended submissions to the grader.
     """
 
-    help = ("Usage: openended_post <course_id> <problem_location> <student_ids.txt> <hostname> --dry-run --task-number=<task_number>\n"
+    help = ("Usage: openended_post <course_id> <problem_id> <student_ids.txt> <hostname> --dry-run --task-number=<task_number>\n"
             "The text file should contain a User.id in each line.")
 
     option_list = BaseCommand.option_list + (
@@ -39,7 +39,7 @@ class Command(BaseCommand):
 
         if len(args) == 4:
             course_id = CourseKey.from_string(args[0])
-            location = UsageKey.from_string(args[1]).map_into_course(course_id)
+            usage_key = UsageKey.from_string(args[1]).map_into_course(course_id)
             students_ids = [line.strip() for line in open(args[2])]
             hostname = args[3]
         else:
@@ -52,9 +52,9 @@ class Command(BaseCommand):
             print err
             return
 
-        descriptor = modulestore().get_item(location, depth=0)
+        descriptor = modulestore().get_item(usage_key, depth=0)
         if descriptor is None:
-            print "Location not found in course"
+            print "Problem {} not found in course".format(usage_key)
             return
 
         if dry_run:
@@ -64,7 +64,7 @@ class Command(BaseCommand):
         print "Number of students: {0}".format(students.count())
 
         for student in students:
-            post_submission_for_student(student, course, location, task_number, dry_run=dry_run, hostname=hostname)
+            post_submission_for_student(student, course, usage_key, task_number, dry_run=dry_run, hostname=hostname)
 
 
 def post_submission_for_student(student, course, location, task_number, dry_run=True, hostname=None):

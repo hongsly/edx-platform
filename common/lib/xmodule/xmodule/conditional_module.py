@@ -194,7 +194,7 @@ class ConditionalDescriptor(ConditionalFields, SequenceDescriptor):
         Create an instance of the conditional module.
         """
         super(ConditionalDescriptor, self).__init__(*args, **kwargs)
-        # Convert sources xml_attribute to a ReferenceList field type so Location/Locator
+        # Convert sources xml_attribute to a ReferenceList field type so UsageKey
         # substitution can be done.
         if not self.sources_list:
             if 'sources' in self.xml_attributes and isinstance(self.xml_attributes['sources'], basestring):

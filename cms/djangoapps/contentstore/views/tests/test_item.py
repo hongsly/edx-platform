@@ -23,7 +23,6 @@ from xmodule.capa_module import CapaDescriptor
 from xmodule.modulestore.django import modulestore
 from xmodule.modulestore.exceptions import ItemNotFoundError
 from opaque_keys.edx.keys import UsageKey
-from opaque_keys.edx.locations import Location
 from xmodule.partitions.partitions import Group, UserPartition
 
 
@@ -908,9 +907,7 @@ class TestComponentHandler(TestCase):
 
         self.descriptor = self.get_modulestore.return_value.get_item.return_value
 
-        self.usage_key_string = unicode(
-            Location('dummy_org', 'dummy_course', 'dummy_run', 'dummy_category', 'dummy_name')
-        )
+        self.usage_key_string = u'i4x://dummy_org/dummy_course/dummy_category/dummy_name'
 
         self.user = UserFactory()
 

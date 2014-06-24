@@ -33,14 +33,15 @@ from xblock.runtime import KvsFieldData
 from xblock.exceptions import InvalidScopeError
 from xblock.fields import Scope, ScopeIds, Reference, ReferenceList, ReferenceValueDict
 
-from xmodule.modulestore import ModuleStoreWriteBase, MONGO_MODULESTORE_TYPE
-from opaque_keys.edx.locations import Location
+from opaque_keys import InvalidKeyError
 from opaque_keys.edx.keys import UsageKey
-from xmodule.modulestore.exceptions import ItemNotFoundError, InvalidLocationError
+from opaque_keys.edx.locator import CourseLocator, BlockUsageLocator
+
+from xmodule.modulestore import ModuleStoreWriteBase, MONGO_MODULESTORE_TYPE
+from xmodule.modulestore.exceptions import ItemNotFoundError
 from xmodule.modulestore.inheritance import own_metadata, InheritanceMixin, inherit_metadata, InheritanceKeyValueStore
 from xmodule.tabs import StaticTab, CourseTabList
 from xblock.core import XBlock
-from opaque_keys.edx.locations import SlashSeparatedCourseKey
 from xmodule.exceptions import HeartbeatFailure
 
 log = logging.getLogger(__name__)
@@ -410,7 +411,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
         # now go through the results and order them by the location url
         for result in resultset:
             # manually pick it apart b/c the db has tag and we want revision = None regardless
-            location = Location._from_deprecated_son(result['_id'], course_id.run).replace(revision=None)
+            location = BlockUsageLocator._from_deprecated_son(result['_id'], course_id.run).replace(revision=None)
 
             location_url = unicode(location)
             if location_url in results_by_url:
@@ -535,7 +536,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
             for item in to_process:
                 self._clean_item_data(item)
                 children.extend(item.get('definition', {}).get('children', []))
-                data[Location._from_deprecated_son(item['location'], course_key.run)] = item
+                data[BlockUsageLocator._from_deprecated_son(item['location'], course_key.run)] = item
 
             if depth == 0:
                 break
@@ -557,7 +558,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
         """
         Load an XModuleDescriptor from item, using the children stored in data_cache
         """
-        location = Location._from_deprecated_son(item['location'], course_key.run)
+        location = BlockUsageLocator._from_deprecated_son(item['location'], course_key.run)
         data_dir = getattr(item, 'data_dir', location.course)
         root = self.fs_root / data_dir
 
@@ -612,7 +613,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
         base_list = sum(
             [
                 self._load_items(
-                    SlashSeparatedCourseKey(course['_id']['org'], course['_id']['course'], course['_id']['name'], deprecated=True),
+                    CourseLocator(course['_id']['org'], course['_id']['course'], course['_id']['name'], deprecated=True),
                     [course]
                 )
                 for course
@@ -748,7 +749,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
                 Common qualifiers are ``category`` or any field name. if the target field is a list,
                 then it searches for the given value in the list not list equivalence.
                 Substring matching pass a regex object.
-                For this modulestore, ``name`` is a commonly provided key (Location based stores)
+                For this modulestore, ``name`` is a commonly provided key
                 This modulestore does not allow searching dates by comparison or edited_by, previous_version,
                 update_version info.
         """
@@ -792,10 +793,10 @@ class MongoModuleStore(ModuleStoreWriteBase):
         Returns: a CourseDescriptor
 
         Raises:
-            InvalidLocationError: If a course with the same org, course, and run already exists
+            InvalidKeyError: If a course with the same org, course, and run already exists
         """
 
-        course_id = SlashSeparatedCourseKey(org, course, run, deprecated=True)
+        course_id = CourseLocator(org, course, run, deprecated=True)
 
         # Check if a course with this org/course has been defined before (case-insensitive)
         course_search_location = SON([
@@ -806,7 +807,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
         ])
         courses = self.collection.find(course_search_location, fields=('_id'))
         if courses.count() > 0:
-            raise InvalidLocationError(
+            raise InvalidKeyError(CourseLocator,
                 "There are already courses with the given org and course id: {}".format([
                     course['_id'] for course in courses
                 ]))
@@ -1109,7 +1110,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
             if item['_id']['category'] != 'course':
                 # It would be nice to change this method to return UsageKeys instead of the deprecated string.
                 item_locs.add(
-                    unicode(Location._from_deprecated_son(item['_id'], course_key.run).replace(revision=None))
+                    unicode(BlockUsageLocator._from_deprecated_son(item['_id'], course_key.run).replace(revision=None))
                 )
             all_reachable = all_reachable.union(item.get('definition', {}).get('children', []))
         item_locs -= all_reachable
@@ -1123,7 +1124,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
         """
         courses = self.collection.find({'_id.category': 'course', 'definition.data.wiki_slug': wiki_slug})
         # the course's run == its name. It's the only xblock for which that's necessarily true.
-        return [Location._from_deprecated_son(course['_id'], course['_id']['name']) for course in courses]
+        return [BlockUsageLocator._from_deprecated_son(course['_id'], course['_id']['name']) for course in courses]
 
     def _create_new_field_data(self, _category, _location, definition_data, metadata):
         """

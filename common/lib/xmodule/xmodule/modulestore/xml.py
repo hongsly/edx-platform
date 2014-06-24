@@ -21,12 +21,12 @@ from xmodule.x_module import XMLParsingSystem, policy_key
 from xmodule.modulestore.xml_exporter import DEFAULT_CONTENT_FIELDS
 from xmodule.tabs import CourseTabList
 from opaque_keys.edx.keys import UsageKey, CourseKey
-from opaque_keys.edx.locations import SlashSeparatedCourseKey
+from opaque_keys.edx.locator import BlockUsageLocator, CourseLocator
 
 from xblock.field_data import DictFieldData
 from xblock.runtime import DictKeyValueStore, IdGenerator
 
-from . import ModuleStoreReadBase, Location, XML_MODULESTORE_TYPE
+from . import ModuleStoreReadBase, XML_MODULESTORE_TYPE
 
 from .exceptions import ItemNotFoundError
 from .inheritance import compute_inherited_metadata, inheriting_field_data
@@ -92,8 +92,8 @@ class ImportSystem(XMLParsingSystem, MakoDescriptorSystem):
                 # Things to try to get a name, in order  (key, cleaning function, remove key after reading?)
                 lookups = [('url_name', id, False),
                            ('slug', id, True),
-                           ('name', Location.clean, False),
-                           ('display_name', Location.clean, False)]
+                           ('name', BlockUsageLocator.clean, False),
+                           ('display_name', BlockUsageLocator.clean, False)]
 
                 url_name = None
                 for key, clean, remove in lookups:
@@ -244,7 +244,7 @@ class ImportSystem(XMLParsingSystem, MakoDescriptorSystem):
 
 class CourseLocationGenerator(IdGenerator):
     """
-    IdGenerator for Location-based definition ids and usage ids
+    IdGenerator for UsageKey-based definition ids and usage ids
     based within a course
     """
     def __init__(self, course_id):
@@ -339,7 +339,7 @@ class ParentTracker(object):
         """
         Add a parent of child location to the set of parents.  Duplicate calls have no effect.
 
-        child and parent must be :class:`.Location` instances.
+        child and parent must be :class:`.UsageKey` instances.
         """
         setp = self._parents.setdefault(child, set())
         setp.add(parent)
@@ -403,7 +403,7 @@ class XMLModuleStore(ModuleStoreReadBase):
             self.default_class = class_
 
         self.parent_trackers = defaultdict(ParentTracker)
-        self.reference_type = Location
+        self.reference_type = BlockUsageLocator
 
         # All field data will be stored in an inheriting field data.
         self.field_data = inheriting_field_data(kvs=DictKeyValueStore())
@@ -563,14 +563,14 @@ class XMLModuleStore(ModuleStoreReadBase):
                 policy = {}
                 # VS[compat] : 'name' is deprecated, but support it for now...
                 if course_data.get('name'):
-                    url_name = Location.clean(course_data.get('name'))
+                    url_name = BlockUsageLocator.clean(course_data.get('name'))
                     tracker("'name' is deprecated for module xml.  Please use "
                             "display_name and url_name.")
                 else:
                     raise ValueError("Can't load a course without a 'url_name' "
                                      "(or 'name') set.  Set url_name.")
 
-            course_id = SlashSeparatedCourseKey(org, course, url_name, deprecated=True)
+            course_id = CourseLocator(org, course, url_name, deprecated=True)
             if course_ids is not None and course_id not in course_ids:
                 return None
 
@@ -769,7 +769,7 @@ class XMLModuleStore(ModuleStoreReadBase):
                 Common qualifiers are ``category`` or any field name. if the target field is a list,
                 then it searches for the given value in the list not list equivalence.
                 Substring matching pass a regex object.
-                For this modulestore, ``name`` is another commonly provided key (Location based stores)
+                For this modulestore, ``name`` is another commonly provided key
                 (but not revision!)
                 For this modulestore,
                 you can search dates by providing either a datetime for == (probably
@@ -826,7 +826,7 @@ class XMLModuleStore(ModuleStoreReadBase):
         '''Find all locations that are the parents of this location in this
         course.  Needed for path_to_location().
 
-        returns an iterable of things that can be passed to Location.  This may
+        returns an iterable of UsageKeys.  This may
         be empty if there are no parents.
         '''
         if not self._validate_usage_key(location):

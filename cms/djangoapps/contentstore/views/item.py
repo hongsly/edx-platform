@@ -21,7 +21,7 @@ from xblock.fragment import Fragment
 
 import xmodule
 from xmodule.modulestore.django import modulestore
-from xmodule.modulestore.exceptions import ItemNotFoundError, InvalidLocationError, DuplicateItemError
+from xmodule.modulestore.exceptions import ItemNotFoundError, DuplicateItemError
 from xmodule.modulestore.inheritance import own_metadata
 
 from util.json_request import expect_json, JsonResponse
@@ -283,7 +283,7 @@ def _save_item(request, usage_key, data=None, children=None, metadata=None, null
             existing_item = store.get_item(usage_key)
         else:
             raise
-    except InvalidLocationError:
+    except InvalidKeyError:
         log.error("Can't find item by location.")
         return JsonResponse({"error": "Can't find item by location: " + unicode(usage_key)}, 404)
 
@@ -478,7 +478,7 @@ def _duplicate_item(parent_usage_key, duplicate_source_usage_key, display_name=N
 
 def _delete_item_at_location(item_usage_key, delete_children=False, delete_all_versions=False, user=None):
     """
-    Deletes the item at with the given Location.
+    Deletes the item at with the given usage_key.
 
     It is assumed that course permissions have already been checked.
     """

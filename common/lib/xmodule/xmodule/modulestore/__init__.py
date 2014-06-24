@@ -1,6 +1,6 @@
 """
 This module provides an abstraction for working with XModuleDescriptors
-that are stored in a database an accessible using their Location as an identifier
+that are stored in a database an accessible using their UsageKey as an identifier
 """
 
 import logging
@@ -12,10 +12,9 @@ import collections
 from abc import ABCMeta, abstractmethod
 from xblock.plugin import default_select
 
-from .exceptions import InvalidLocationError, InsufficientSpecificationError
+from .exceptions import InsufficientSpecificationError
 from xmodule.errortracker import make_error_tracker
 from opaque_keys.edx.keys import CourseKey, UsageKey
-from opaque_keys.edx.locations import Location  # For import backwards compatibility
 from opaque_keys import InvalidKeyError
 from xblock.runtime import Mixologist
 from xblock.core import XBlock
@@ -84,7 +83,7 @@ class ModuleStoreRead(object):
         that match location. Any element of location that is None is treated
         as a wildcard that matches any value
 
-        location: Something that can be passed to Location
+        location: A UsageKey
 
         depth: An argument that some module stores may use to prefetch
             descendents of the queried modules for more efficient results later
@@ -187,7 +186,7 @@ class ModuleStoreRead(object):
         '''Find all locations that are the parents of this location in this
         course.  Needed for path_to_location().
 
-        returns an iterable of things that can be passed to Location.
+        returns an iterable of UsageKeys.
         '''
         pass
 

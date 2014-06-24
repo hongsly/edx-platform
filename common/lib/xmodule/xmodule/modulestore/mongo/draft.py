@@ -14,7 +14,7 @@ from xmodule.exceptions import InvalidVersionError
 from xmodule.modulestore.exceptions import ItemNotFoundError, DuplicateItemError
 from xmodule.modulestore.mongo.base import MongoModuleStore
 from opaque_keys.edx.keys import UsageKey
-from opaque_keys.edx.locations import Location
+from opaque_keys.edx.locator import BlockUsageLocator
 
 DRAFT = 'draft'
 # Things w/ these categories should never be marked as version='draft'
@@ -23,14 +23,14 @@ DIRECT_ONLY_CATEGORIES = ['course', 'chapter', 'sequential', 'about', 'static_ta
 
 def as_draft(location):
     """
-    Returns the Location that is the draft for `location`
+    Returns the UsageKey that is the draft for `location`
     """
     return location.replace(revision=DRAFT)
 
 
 def as_published(location):
     """
-    Returns the Location that is the published version for `location`
+    Returns the UsageKey that is the published version for `location`
     """
     return location.replace(revision=None)
 
@@ -89,7 +89,7 @@ class DraftModuleStore(MongoModuleStore):
         Create the new xmodule but don't save it. Returns the new module with a draft locator if
         the category allows drafts. If the category does not allow drafts, just creates a published module.
 
-        :param location: a Location--must have a category
+        :param location: a UsageKey--must have a category
         :param definition_data: can be empty. The initial definition_data for the kvs
         :param metadata: can be empty, the initial metadata for the kvs
         :param system: if you already have an xmodule from the course, the xmodule.system value
@@ -118,7 +118,7 @@ class DraftModuleStore(MongoModuleStore):
                 Common qualifiers are ``category`` or any field name. if the target field is a list,
                 then it searches for the given value in the list not list equivalence.
                 Substring matching pass a regex object.
-                ``name`` is another commonly provided key (Location based stores)
+                ``name`` is another commonly provided key
         """
         draft_items = [
             wrap_draft(item) for item in
@@ -184,7 +184,7 @@ class DraftModuleStore(MongoModuleStore):
         """
         Delete an item from this modulestore
 
-        location: Something that can be passed to Location
+        location: A UsageKey
         """
         if location.category in DIRECT_ONLY_CATEGORIES:
             return super(DraftModuleStore, self).delete_item(as_published(location))
@@ -260,7 +260,7 @@ class DraftModuleStore(MongoModuleStore):
 
         to_process_dict = {}
         for non_draft in to_process_non_drafts:
-            to_process_dict[Location._from_deprecated_son(non_draft["_id"], course_key.run)] = non_draft
+            to_process_dict[BlockUsageLocator._from_deprecated_son(non_draft["_id"], course_key.run)] = non_draft
 
         # now query all draft content in another round-trip
         query = {
@@ -274,7 +274,7 @@ class DraftModuleStore(MongoModuleStore):
         # with the draft. This is because the semantics of the DraftStore is to
         # always return the draft - if available
         for draft in to_process_drafts:
-            draft_loc = Location._from_deprecated_son(draft["_id"], course_key.run)
+            draft_loc = BlockUsageLocator._from_deprecated_son(draft["_id"], course_key.run)
             draft_as_non_draft_loc = draft_loc.replace(revision=None)
 
             # does non-draft exist in the collection

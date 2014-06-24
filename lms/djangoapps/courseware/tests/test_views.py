@@ -21,7 +21,6 @@ from student.models import CourseEnrollment
 from student.tests.factories import AdminFactory
 from edxmako.middleware import MakoMiddleware
 
-from opaque_keys.edx.locations import Location
 from xmodule.modulestore.django import modulestore
 from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
@@ -68,8 +67,7 @@ class TestJumpTo(TestCase):
         self.assertRedirects(response, expected, status_code=302, target_status_code=302)
 
     def test_jumpto_id_invalid_location(self):
-        location = Location('edX', 'toy', 'NoSuchPlace', None, None, None)
-        jumpto_url = '{0}/{1}/jump_to_id/{2}'.format('/courses', unicode(self.course_key), unicode(location))
+        jumpto_url = '{0}/{1}/jump_to_id/{2}'.format('/courses', unicode(self.course_key), 'NoSuchPlace')
         response = self.client.get(jumpto_url)
         self.assertEqual(response.status_code, 404)
 

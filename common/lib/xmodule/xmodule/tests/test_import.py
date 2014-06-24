@@ -11,7 +11,6 @@ from mock import Mock, patch
 from django.utils.timezone import UTC
 
 from xmodule.xml_module import is_pointer_tag
-from opaque_keys.edx.locations import Location
 from xmodule.modulestore import only_xmodules
 from xmodule.modulestore.xml import ImportSystem, XMLModuleStore
 from xmodule.modulestore.inheritance import compute_inherited_metadata
@@ -384,9 +383,9 @@ class ImportTestCase(BaseCourseTestCase):
 
         modulestore = XMLModuleStore(DATA_DIR, course_dirs=['toy', 'two_toys'])
 
-        location = Location("edX", "toy", "2012_Fall", "video", "Welcome", None)
+        location = CourseKey.from_string("edX/toy/2012_Fall").make_usage_key('video', "Welcome")
         toy_video = modulestore.get_item(location)
-        location_two = Location("edX", "toy", "TT_2012_Fall", "video", "Welcome", None)
+        location_two = CourseKey.from_string("edX/toy/TT_2012_Fall").make_usage_key('video', "Welcome")
         two_toy_video = modulestore.get_item(location_two)
         self.assertEqual(toy_video.youtube_id_1_0, "p2Q6BrNhdh8")
         self.assertEqual(two_toy_video.youtube_id_1_0, "p2Q6BrNhdh9")

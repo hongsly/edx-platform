@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from xmodule.modulestore import prefer_xmodules
 from opaque_keys.edx.keys import UsageKey
-from opaque_keys.edx.locations import Location
+from opaque_keys.edx.locator import BlockUsageLocator, CourseLocator
 from xblock.core import XBlock
 
 
@@ -49,13 +49,11 @@ class CourseFactory(XModuleFactory):
         # because the factory provides a default 'number' arg, prefer the non-defaulted 'course' arg if any
         number = kwargs.pop('course', kwargs.pop('number', None))
         store = kwargs.pop('modulestore')
-        name = kwargs.get('name', kwargs.get('run', Location.clean(kwargs.get('display_name'))))
+        name = kwargs.get('name', kwargs.get('run', BlockUsageLocator.clean(kwargs.get('display_name'))))
         run = kwargs.get('run', name)
 
-        location = Location(org, number, run, 'course', name)
-
         # Write the data to the mongo datastore
-        new_course = store.create_xmodule(location, metadata=kwargs.get('metadata', None))
+        new_course = store.create_course(org, number, run, fields=kwargs.get('metadata', None))
 
         # The rest of kwargs become attributes on the course:
         for k, v in kwargs.iteritems():
@@ -95,7 +93,6 @@ class ItemFactory(XModuleFactory):
 
     @lazy_attribute
     def parent_location(self):
-        default_location = Location('MITx', '999', 'Robot_Super_Course', 'course', 'Robot_Super_Course', None)
         try:
             parent = self.parent
         # This error is raised if the caller hasn't provided either parent or parent_location
@@ -104,7 +101,7 @@ class ItemFactory(XModuleFactory):
             return default_location
 
         if parent is None:
-            return default_location
+            return BlockUsageLocator(CourseLocator('MITx', '999', 'Robot_Super_Course'), 'course', 'Robot_Super_Course')
 
         return parent.location
 
