@@ -817,8 +817,8 @@ class MongoModuleStore(ModuleStoreWriteBase):
 
         # clone a default 'about' overview module as well
         about_location = location.replace(
-            category='about',
-            name='overview'
+            block_type='about',
+            block_id='overview'
         )
         overview_template = AboutDescriptor.get_template('overview.yaml')
         self.create_and_save_xmodule(
