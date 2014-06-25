@@ -2,12 +2,13 @@
 # pylint: disable=W0621
 
 from lettuce import world, step
-from nose.tools import assert_false, assert_equal, assert_not_equal, assert_regexp_matches  # pylint: disable=E0611
+from nose.tools import assert_false, assert_equal, assert_regexp_matches  # pylint: disable=E0611
 from common import type_in_codemirror, press_the_notification_button, get_codemirror_value
 
 KEY_CSS = '.key h3.title'
 DISPLAY_NAME_KEY = "Course Display Name"
 DISPLAY_NAME_VALUE = '"Robot Super Course"'
+ADVANCED_MODULES_KEY = "Advanced Module List"
 # A few deprecated settings for testing toggling functionality.
 DEPRECATED_SETTINGS = ["CSS Class for Course Reruns", "Hide Progress Tab", "XQA Key"]
 
@@ -60,7 +61,7 @@ def create_value_not_in_quotes(step):
 def i_see_default_advanced_settings(step):
     # Test only a few of the existing properties (there are around 34 of them)
     assert_policy_entries(
-        ["Advanced Module List", DISPLAY_NAME_KEY, "Show Calculator"], ["[]", DISPLAY_NAME_VALUE, "false"])
+        [ADVANCED_MODULES_KEY, DISPLAY_NAME_KEY, "Show Calculator"], ["[]", DISPLAY_NAME_VALUE, "false"])
 
 
 @step('the settings are alphabetized$')
