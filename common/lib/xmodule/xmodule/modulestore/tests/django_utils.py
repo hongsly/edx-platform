@@ -213,7 +213,6 @@ class ModuleStoreTestCase(TestCase):
         """
         If using a Mongo-backed modulestore & contentstore, drop the collections.
         """
-
         # This will return the mongo-backed modulestore
         # even if we're using a mixed modulestore
         store = editable_modulestore(store_name)

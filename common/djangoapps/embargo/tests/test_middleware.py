@@ -13,6 +13,7 @@ from courseware.tests.tests import TEST_DATA_MONGO_MODULESTORE
 from student.models import CourseEnrollment
 from student.tests.factories import UserFactory
 from xmodule.modulestore.tests.factories import CourseFactory
+from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 
 # Explicitly import the cache from ConfigurationModel so we can reset it after each test
 from config_models.models import cache
@@ -20,7 +21,7 @@ from embargo.models import EmbargoedCourse, EmbargoedState, IPFilter
 
 
 @override_settings(MODULESTORE=TEST_DATA_MONGO_MODULESTORE)
-class EmbargoMiddlewareTests(TestCase):
+class EmbargoMiddlewareTests(ModuleStoreTestCase):
     """
     Tests of EmbargoMiddleware
     """
