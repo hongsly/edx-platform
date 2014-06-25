@@ -54,7 +54,7 @@ textarea {
     <h2 class="instructor-nav">
 	  <a href="${reverse('sysadmin')}">${_('Users')}</a>
       <a href="${reverse('sysadmin_courses')}">${_('Courses')}</a>
-      <a href="${reverse('sysadmin_staffing')}">${_('Staffing and Enrollment')}</a> 
+      <a href="${reverse('sysadmin_staffing')}">${_('Staffing and Enrollment')}</a>
       ## Translators: refers to http://git-scm.com/docs/git-log
       <a href="${reverse('gitlogs')}" class="active-section">${_('Git Logs')}</a>
     </h2>
@@ -79,7 +79,7 @@ textarea {
 	  </thead>
 	  <tbody>
 		%for cil in cilset[:10]:
-        <% course_id_string = cil.course_id.to_deprecated_string() if cil.course_id else None %>
+        <% course_id_string = unicode(cil.course_id) if cil.course_id else None %>
         <tr>
 	      <td>${cil.created}</td>
 	      <td><a href="${reverse('gitlogs')}/${course_id_string}">${course_id_string}</a></td>
@@ -109,13 +109,13 @@ textarea {
 	  </thead>
 	  <tbody>
 		% for cil in cilset[:2]:
-        <% course_id_string = cil.course_id.to_deprecated_string() if cil.course_id else None %>
+        <% course_id_string = unicode(cil.course_id) if cil.course_id else None %>
         <tr>
 	      <td>${cil.created}</td>
 	      <td><a href="${reverse('gitlogs')}/${course_id_string}">${course_id_string}</a></td>
 	      <td>${cil.git_log}</td>
 		</tr>
-	
+
 		<tr>
 		  <td colspan="3">
 			<pre>${cil.import_log | h}</pre>
