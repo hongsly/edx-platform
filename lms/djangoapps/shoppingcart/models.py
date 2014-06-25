@@ -380,6 +380,13 @@ class PaidCourseRegistration(OrderItem):
                              for item in order.orderitem_set.all().select_subclasses("paidcourseregistration")]
 
     @classmethod
+    def get_total_amount_of_purchased_item(cls, course_key):
+        """
+        This will return the total amount of money that a purchased course generated
+        """
+        return sum(i.line_cost for i in cls.objects.filter(course_id=course_key).filter(status='purchased'))  # pylint: disable=E1101
+
+    @classmethod
     @transaction.commit_on_success
     def add_to_order(cls, order, course_id, mode_slug=CourseMode.DEFAULT_MODE_SLUG, cost=None, currency=None):
         """

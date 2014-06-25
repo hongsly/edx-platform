@@ -24,7 +24,7 @@ from courseware.courses import get_course_by_id, get_cms_course_link, get_course
 from django_comment_client.utils import has_forum_access
 from django_comment_common.models import FORUM_ROLE_ADMINISTRATOR
 from student.models import CourseEnrollment
-from shoppingcart.models import Coupons
+from shoppingcart.models import Coupons, PaidCourseRegistration
 from course_modes.models import CourseMode
 
 from bulk_email.models import CourseAuthorization
@@ -123,6 +123,7 @@ section_display_name will be used to generate link titles in the nav bar.
 def _section_e_commerce(course_key, access):
     """ Provide data for the corresponding dashboard section """
     coupons = Coupons.objects.filter(course_id=course_key).order_by('-is_active')
+    total_amount = PaidCourseRegistration.get_total_amount_of_purchased_item(course_key)
 
     section_data = {
         'section_key': 'e-commerce',
@@ -133,7 +134,8 @@ def _section_e_commerce(course_key, access):
         'ajax_edit_coupon_info': reverse('edit_coupon_info'),
         'ajax_update_coupon': reverse('update_coupon'),
         'instructor_url': reverse('instructor_dashboard', kwargs={'course_id': course_key.to_deprecated_string()}),
-        'coupons': coupons
+        'coupons': coupons,
+        'total_amount': total_amount,
     }
     return section_data
 
