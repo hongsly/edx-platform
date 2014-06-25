@@ -185,7 +185,7 @@ class CachingDescriptorSystem(MakoDescriptorSystem):
                 if isinstance(data, basestring):
                     data = {'data': data}
                 mixed_class = self.mixologist.mix(class_)
-                if data is not None:
+                if data:  # empty or None means no work
                     data = self._convert_reference_fields_to_keys(mixed_class, location.course_key, data)
                 metadata = self._convert_reference_fields_to_keys(mixed_class, location.course_key, metadata)
                 kvs = MongoKeyValueStore(
@@ -428,7 +428,8 @@ class MongoModuleStore(ModuleStoreWriteBase):
                 additional_children = result.get('definition', {}).get('children', [])
                 total_children = existing_children + additional_children
                 results_by_url[location_url].setdefault('definition', {})['children'] = total_children
-            results_by_url[location_url] = result
+            else:
+                results_by_url[location_url] = result
             if location.category == 'course':
                 root = location_url
 
@@ -461,7 +462,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
 
     def _get_cached_metadata_inheritance_tree(self, course_id, force_refresh=False):
         '''
-        TODO (cdodge) This method can be deleted when the 'split module store' work has been completed
+        Compute the metadata inheritance for the course.
         '''
         tree = {}
 
@@ -504,6 +505,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
         If given a runtime, it replaces the cached_metadata in that runtime. NOTE: failure to provide
         a runtime may mean that some objects report old values for inherited data.
         """
+        # below is done for side effects when runtime is None
         cached_metadata = self._get_cached_metadata_inheritance_tree(course_id, force_refresh=True)
         if runtime:
             runtime.cached_metadata = cached_metadata

@@ -1730,7 +1730,7 @@ class ContentStoreTest(ContentStoreTestCase):
         module_store.update_item(parent, self.user.id)
 
         # flush the cache
-        module_store.refresh_cached_metadata_inheritance_tree(new_component_location.course_key)
+        module_store.refresh_cached_metadata_inheritance_tree(new_component_location.course_key, parent.runtime)
         new_module = module_store.get_item(new_component_location)
 
         # check for grace period definition which should be defined at the course level
