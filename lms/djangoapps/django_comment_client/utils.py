@@ -16,8 +16,7 @@ import pystache_custom as pystache
 
 from xmodule.modulestore.django import modulestore
 from django.utils.timezone import UTC
-from opaque_keys.edx.locations import i4xEncoder
-from opaque_keys.edx.keys import CourseKey
+from opaque_keys.edx.keys import CourseKey, i4xEncoder
 import json
 
 log = logging.getLogger(__name__)

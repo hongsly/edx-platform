@@ -27,8 +27,7 @@ from django.core.mail import send_mail
 from django.utils import timezone
 
 from opaque_keys import InvalidKeyError
-from opaque_keys.edx.keys import CourseKey, UsageKey
-from opaque_keys.edx.locations import i4xEncoder
+from opaque_keys.edx.keys import CourseKey, UsageKey, i4xEncoder
 
 from xmodule_modifiers import wrap_xblock
 import xmodule.graders as xmgraders

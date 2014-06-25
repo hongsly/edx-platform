@@ -5,7 +5,7 @@ Tests of the LMS XBlock Runtime and associated utilities
 from django.contrib.auth.models import User
 from django.conf import settings
 from ddt import ddt, data
-from mock import Mock
+from mock import Mock, MagicMock
 from unittest import TestCase
 from urlparse import urlparse
 from opaque_keys.edx.keys import CourseKey
@@ -42,8 +42,8 @@ class TestHandlerUrl(TestCase):
     """Test the LMS handler_url"""
 
     def setUp(self):
-        self.block = Mock()
-        self.block.scope_ids.usage_id.__unicode__.return_value.encode.return_value = 'dummy'
+        self.block = MagicMock()
+        self.block.scope_ids.usage_id.__unicode__ = Mock(return_value=u'dummy')
         self.course_key = CourseKey.from_string("org/course/run")
         self.runtime = LmsModuleSystem(
             static_url='/static',

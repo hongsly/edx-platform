@@ -855,7 +855,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
             ItemNotFoundError: raised if the location is invalid
         """
         if not self._validate_usage_key(location):
-            raise ItemNotFoundError(location)
+            raise InvalidKeyError(BlockUsageLocator, location)
 
         # differs from split mongo in that I believe most of this logic should be above the persistence
         # layer but added it here to enable quick conversion. I'll need to reconcile these.

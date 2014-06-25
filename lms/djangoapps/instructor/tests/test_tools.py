@@ -153,7 +153,7 @@ class TestTitleOrUrl(unittest.TestCase):
 
     def test_url(self):
         unit = mock.Mock(display_name=None)
-        unit.location.__unicode__.return_value = 'test:hello'
+        unit.location.__unicode__ = mock.Mock(return_value=u'test:hello')
         self.assertEquals(tools.title_or_url(unit), 'test:hello')
 
 
