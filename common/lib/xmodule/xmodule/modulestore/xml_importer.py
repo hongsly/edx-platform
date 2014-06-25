@@ -354,7 +354,7 @@ def import_module(
 
     # Move the module to a new course
     new_usage_key = module.scope_ids.usage_id.map_into_course(dest_course_id)
-    if new_usage_key.category == 'course':
+    if new_usage_key.block_type == 'course':
         new_usage_key = new_usage_key.replace(name=dest_course_id.run)
     new_module = store.create_xmodule(new_usage_key, system=system)
 
@@ -608,14 +608,14 @@ def validate_category_hierarchy(
 
     for parent in parents:
         for child_loc in parent.children:
-            if child_loc.category != expected_child_category:
+            if child_loc.block_type != expected_child_category:
                 err_cnt += 1
                 print(
                     "ERROR: child {child} of parent {parent} was expected to be "
                     "category of {expected} but was {actual}".format(
                         child=child_loc, parent=parent.location,
                         expected=expected_child_category,
-                        actual=child_loc.category
+                        actual=child_loc.block_type
                     )
                 )
 

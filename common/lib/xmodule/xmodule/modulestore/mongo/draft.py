@@ -76,7 +76,7 @@ class DraftModuleStore(MongoModuleStore):
             in the request. The depth is counted in the number of calls to
             get_children() to cache. None indicates to cache all descendents
         """
-        if usage_key.category not in DIRECT_ONLY_CATEGORIES:
+        if usage_key.block_type not in DIRECT_ONLY_CATEGORIES:
             try:
                 return wrap_draft(super(DraftModuleStore, self).get_item(as_draft(usage_key), depth=depth))
             except ItemNotFoundError:

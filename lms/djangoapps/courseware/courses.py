@@ -177,7 +177,7 @@ def get_course_about_section(course, section_key):
 
             request = get_request_for_thread()
 
-            loc = course.location.replace(category='about', name=section_key)
+            loc = course.location.replace(block_type='about', block_id=section_key)
 
             # Use an empty cache
             field_data_cache = FieldDataCache([], course.id, request.user)
