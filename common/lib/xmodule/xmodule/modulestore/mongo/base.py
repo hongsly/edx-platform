@@ -205,7 +205,7 @@ class CachingDescriptorSystem(MakoDescriptorSystem):
                 if self.cached_metadata is not None:
                     # parent container pointers don't differentiate between draft and non-draft
                     # so when we do the lookup, we should do so with a non-draft location
-                    non_draft_loc = location.replace(revision=None)
+                    non_draft_loc = location.for_branch(None)
 
                     # Convert the serialized fields values in self.cached_metadata
                     # to python values
@@ -411,7 +411,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
         # now go through the results and order them by the location url
         for result in resultset:
             # manually pick it apart b/c the db has tag and we want revision = None regardless
-            location = BlockUsageLocator._from_deprecated_son(result['_id'], course_id.run).replace(revision=None)
+            location = BlockUsageLocator._from_deprecated_son(result['_id'], course_id.run).for_branch(None)
 
             location_url = unicode(location)
             if location_url in results_by_url:
@@ -1110,7 +1110,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
             if item['_id']['category'] != 'course':
                 # It would be nice to change this method to return UsageKeys instead of the deprecated string.
                 item_locs.add(
-                    unicode(BlockUsageLocator._from_deprecated_son(item['_id'], course_key.run).replace(revision=None))
+                    unicode(BlockUsageLocator._from_deprecated_son(item['_id'], course_key.run).for_branch(None))
                 )
             all_reachable = all_reachable.union(item.get('definition', {}).get('children', []))
         item_locs -= all_reachable

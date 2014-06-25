@@ -25,14 +25,14 @@ def as_draft(location):
     """
     Returns the UsageKey that is the draft for `location`
     """
-    return location.replace(revision=DRAFT)
+    return location.for_branch(DRAFT)
 
 
 def as_published(location):
     """
     Returns the UsageKey that is the published version for `location`
     """
-    return location.replace(revision=None)
+    return location.for_branch(None)
 
 
 def wrap_draft(item):
@@ -42,7 +42,7 @@ def wrap_draft(item):
     non-draft location in either case
     """
     setattr(item, 'is_draft', item.location.revision == DRAFT)
-    item.location = item.location.replace(revision=None)
+    item.location = item.location.for_branch(None)
     return item
 
 
@@ -275,7 +275,7 @@ class DraftModuleStore(MongoModuleStore):
         # always return the draft - if available
         for draft in to_process_drafts:
             draft_loc = BlockUsageLocator._from_deprecated_son(draft["_id"], course_key.run)
-            draft_as_non_draft_loc = draft_loc.replace(revision=None)
+            draft_as_non_draft_loc = draft_loc.for_branch(None)
 
             # does non-draft exist in the collection
             # if so, replace it

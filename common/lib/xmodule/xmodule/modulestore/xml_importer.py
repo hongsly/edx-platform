@@ -514,14 +514,14 @@ def import_course_draft(
                         # Update the module's location to "draft" revision
                         # We need to call this method (instead of updating the location directly)
                         # to ensure that pure XBlock field data is updated correctly.
-                        _update_module_location(module, module.location.replace(revision='draft'))
+                        _update_module_location(module, module.location.for_branch('draft'))
 
                         # make sure our parent has us in its list of children
                         # this is to make sure private only verticals show up
                         # in the list of children since they would have been
                         # filtered out from the non-draft store export
                         if module.location.block_type == 'vertical':
-                            non_draft_location = module.location.replace(revision=None)
+                            non_draft_location = module.location.for_branch(None)
                             sequential_url = module.xml_attributes['parent_sequential_url']
                             index = int(module.xml_attributes['index_in_children_list'])
 

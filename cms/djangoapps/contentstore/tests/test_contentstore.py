@@ -867,7 +867,7 @@ class ContentStoreToyCourseTest(ModuleStoreTestCase):
 
         # add the new private to list of children
         sequential = module_store.get_item(course_id.make_usage_key('sequential', 'vertical_sequential'))
-        private_location_no_draft = private_vertical.location.replace(revision=None)
+        private_location_no_draft = private_vertical.location.for_branch(None)
         sequential.children.append(private_location_no_draft)
         module_store.update_item(sequential, self.user.id)
 

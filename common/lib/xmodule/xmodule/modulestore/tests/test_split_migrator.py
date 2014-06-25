@@ -177,7 +177,7 @@ class TestMigration(SplitWMongoCourseBoostrapper):
         # check that locations match
         self.assertEqual(
             presplit_dag_root.location,
-            self.loc_mapper.translate_locator_to_location(split_dag_root.location).replace(revision=None)
+            self.loc_mapper.translate_locator_to_location(split_dag_root.location).for_branch(None)
         )
         # compare all fields but children
         for name, field in presplit_dag_root.fields.iteritems():

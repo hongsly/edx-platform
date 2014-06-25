@@ -158,7 +158,7 @@ class TestLTIModuleListing(ModuleStoreTestCase):
             parent_location=self.section2.location,
             display_name="lti draft",
             category="lti",
-            location=self.course.id.make_usage_key('lti', 'lti_published').replace(revision='draft'),
+            location=self.course.id.make_usage_key('lti', 'lti_published').for_branch('draft'),
         )
 
     def expected_handler_url(self, handler):
