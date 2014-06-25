@@ -11,6 +11,7 @@ from django.core.urlresolvers import reverse
 from xmodule.contentstore.content import StaticContent
 from xmodule.contentstore.django import contentstore
 from xmodule.modulestore.django import modulestore
+from xmodule.modulestore.mixed import store_bulk_write_operations_on_course
 from opaque_keys.edx.locations import SlashSeparatedCourseKey, Location
 from xmodule.modulestore.store_utilities import delete_course
 from student.roles import CourseInstructorRole, CourseStaffRole
@@ -32,18 +33,22 @@ def delete_course_and_groups(course_id, commit=False):
     module_store = modulestore()
     content_store = contentstore()
 
-    if delete_course(module_store, content_store, course_id, commit):
+    with store_bulk_write_operations_on_course(
+        module_store._get_modulestore_for_courseid(course_id),
+        course_id
+    ):
+        if delete_course(module_store, content_store, course_id, commit):
 
-        print 'removing User permissions from course....'
-        # in the django layer, we need to remove all the user permissions groups associated with this course
-        if commit:
-            try:
-                staff_role = CourseStaffRole(course_id)
-                staff_role.remove_users(*staff_role.users_with_role())
-                instructor_role = CourseInstructorRole(course_id)
-                instructor_role.remove_users(*instructor_role.users_with_role())
-            except Exception as err:
-                log.error("Error in deleting course groups for {0}: {1}".format(course_id, err))
+            print 'removing User permissions from course....'
+            # in the django layer, we need to remove all the user permissions groups associated with this course
+            if commit:
+                try:
+                    staff_role = CourseStaffRole(course_id)
+                    staff_role.remove_users(*staff_role.users_with_role())
+                    instructor_role = CourseInstructorRole(course_id)
+                    instructor_role.remove_users(*instructor_role.users_with_role())
+                except Exception as err:
+                    log.error("Error in deleting course groups for {0}: {1}".format(course_id, err))
 
 
 def get_lms_link_for_item(location, preview=False):

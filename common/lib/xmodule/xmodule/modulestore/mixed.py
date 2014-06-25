@@ -466,10 +466,46 @@ class MixedModuleStore(ModuleStoreWriteBase):
 
 @contextmanager
 def store_branch_setting(store, branch_setting):
-    """A context manager for setting a store's branch value"""
+    """
+    A context manager for temporarily setting a store's branch value
+
+    Note: to be effective, the store must be a direct pointer to the underlying store;
+        not the intermediary Mixed store.
+    """
+    assert not isinstance(store, MixedModuleStore)
+
     try:
         previous_branch_setting_func = store.branch_setting_func
         store.branch_setting_func = lambda: branch_setting
         yield
     finally:
         store.branch_setting_func = previous_branch_setting_func
+
+
+@contextmanager
+def store_bulk_write_operations_on_course(store, course_id):
+    """
+    A context manager for notifying the store of bulk write events.
+
+    In the case of Mongo, it temporarily disables refreshing the metadata inheritance tree
+    until the bulk operation is completed.
+
+    Note: to be effective, the store must be a direct pointer to the underlying store;
+        not the intermediary Mixed store.
+    """
+
+    # TODO
+    # Make this multi-process-safe if future operations need it.
+    # Right now, only Import Course, Clone Course, and Delete Course use this, so
+    # it's ok if the cached metadata in the memcache is invalid when another
+    # request comes in for the same course.
+
+    assert not isinstance(store, MixedModuleStore)
+
+    try:
+        if hasattr(store, 'begin_bulk_write_operation_on_course'):
+            store.begin_bulk_write_operation_on_course(course_id)
+        yield
+    finally:
+        if hasattr(store, 'begin_bulk_write_operation_on_course'):
+            store.end_bulk_write_operation_on_course(course_id)

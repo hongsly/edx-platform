@@ -384,6 +384,25 @@ class MongoModuleStore(ModuleStoreWriteBase):
         self.render_template = render_template
         self.i18n_service = i18n_service
 
+        # performance optimization to prevent updating the meta-data inheritance tree during
+        # bulk write operations
+        self.ignore_write_events_on_courses = set()
+
+    def begin_bulk_write_operation_on_course(self, course_id):
+        """
+        Prevent updating the meta-data inheritance cache for the given course
+        """
+        self.ignore_write_events_on_courses.add(course_id)
+
+    def end_bulk_write_operation_on_course(self, course_id):
+        """
+        Restart updating the meta-data inheritance cache for the given course.
+        Refresh the meta-data inheritance cache now since it was temporarily disabled.
+        """
+        if course_id in self.ignore_write_events_on_courses:
+            self.ignore_write_events_on_courses.remove(course_id)
+            self.refresh_cached_metadata_inheritance_tree(course_id)
+
     def _compute_metadata_inheritance_tree(self, course_id):
         '''
         TODO (cdodge) This method can be deleted when the 'split module store' work has been completed
@@ -505,10 +524,11 @@ class MongoModuleStore(ModuleStoreWriteBase):
         If given a runtime, it replaces the cached_metadata in that runtime. NOTE: failure to provide
         a runtime may mean that some objects report old values for inherited data.
         """
-        # below is done for side effects when runtime is None
-        cached_metadata = self._get_cached_metadata_inheritance_tree(course_id, force_refresh=True)
-        if runtime:
-            runtime.cached_metadata = cached_metadata
+        if course_id not in self.ignore_write_events_on_courses:
+            # below is done for side effects when runtime is None
+            cached_metadata = self._get_cached_metadata_inheritance_tree(course_id, force_refresh=True)
+            if runtime:
+                runtime.cached_metadata = cached_metadata
 
     def _clean_item_data(self, item):
         """

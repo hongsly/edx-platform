@@ -1122,13 +1122,11 @@ class ContentStoreToyCourseTest(ContentStoreTestCase):
 
     def test_prefetch_children(self):
         mongo_store = modulestore()._get_modulestore_by_type(MONGO_MODULESTORE_TYPE)
-        import_from_xml(mongo_store, self.user.id, 'common/test/data/', ['toy'])
+        import_from_xml(modulestore(), self.user.id, 'common/test/data/', ['toy'])
         course_id = SlashSeparatedCourseKey('edX', 'toy', '2012_Fall')
 
         wrapper = MongoCollectionFindWrapper(mongo_store.collection.find)
         mongo_store.collection.find = wrapper.find
-        print mongo_store.metadata_inheritance_cache_subsystem
-        print mongo_store.request_cache
 
         # set the branch to 'publish' in order to prevent extra lookups of draft versions
         with store_branch_setting(mongo_store, 'published'):
@@ -1707,7 +1705,7 @@ class ContentStoreTest(ContentStoreTestCase):
         self.assertNotEquals(new_discussion_item.discussion_id, '$$GUID$$')
 
     def test_metadata_inheritance(self):
-        module_store = modulestore()._get_modulestore_by_type(MONGO_MODULESTORE_TYPE)  # pylint: disable=W0212
+        module_store = modulestore()
         _, course_items = import_from_xml(module_store, self.user.id, 'common/test/data/', ['toy'])
 
         course = course_items[0]
@@ -1730,7 +1728,6 @@ class ContentStoreTest(ContentStoreTestCase):
         module_store.update_item(parent, self.user.id)
 
         # flush the cache
-        module_store.refresh_cached_metadata_inheritance_tree(new_component_location.course_key, parent.runtime)
         new_module = module_store.get_item(new_component_location)
 
         # check for grace period definition which should be defined at the course level
@@ -1747,7 +1744,6 @@ class ContentStoreTest(ContentStoreTestCase):
         module_store.update_item(new_module, self.user.id)
 
         # flush the cache and refetch
-        module_store.refresh_cached_metadata_inheritance_tree(new_component_location.course_key)
         new_module = module_store.get_item(new_component_location)
 
         self.assertEqual(timedelta(1), new_module.graceperiod)
