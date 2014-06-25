@@ -159,7 +159,7 @@ class ViewsTestCase(TestCase):
     def test_unicode_handling_in_url(self):
         url_parts = [
             '/courses',
-            self.course.id.to_deprecated_string(),
+            unicode(self.course.id),
             self.chapter.location.name,
             self.section.location.name,
             '1'
