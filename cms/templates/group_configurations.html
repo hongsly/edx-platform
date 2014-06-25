@@ -28,7 +28,9 @@ function(Section, GroupConfigurationCollection, ListConfigurationsView) {
   var expView = new ListConfigurationsView({collection: configurations});
 
   $(function() {
+    % if configurations is not None:
       $(".content-primary").append(expView.render().el);
+    % endif
       $(window).on("beforeunload", function() {
           var dirty = configurations.find(function(configuration) { return configuration.isDirty(); });
           if(dirty) {
@@ -53,7 +55,13 @@ function(Section, GroupConfigurationCollection, ListConfigurationsView) {
   <div class="wrapper-content wrapper">
     <section class="content">
       <article class="content-primary" role="main">
-
+      % if configurations is None:
+        <div class="notice-incontext">
+            <p class="copy">
+                ${_("This module is disabled at the moment.")}
+            </p>
+        </div>
+      % endif
       </article>
       <aside class="content-supplementary" role="complimentary">
         <div class="bit">
