@@ -172,16 +172,13 @@ def import_from_xml(
                 store.create_course(dest_course_id.org, dest_course_id.offering)
             except InvalidLocationError:
                 # course w/ same org and course exists 
-                     log.debug(
-                         "Skipping import of course with id, {0},"
-                         "since it collides with an existing one".format(dest_course_id)
-                     )
-                     continue
+                log.debug(
+                    "Skipping import of course with id, {0},"
+                    "since it collides with an existing one".format(dest_course_id)
+                )
+                continue
 
-        with store_bulk_write_operations_on_course(
-            store._get_modulestore_for_courseid(dest_course_id),
-            dest_course_id
-        ):
+        with store_bulk_write_operations_on_course(store, dest_course_id):
             course_data_path = None
 
             if verbose:

@@ -499,9 +499,8 @@ def store_bulk_write_operations_on_course(store, course_id):
     # Right now, only Import Course, Clone Course, and Delete Course use this, so
     # it's ok if the cached metadata in the memcache is invalid when another
     # request comes in for the same course.
-
-    assert not isinstance(store, MixedModuleStore)
-
+    if hasattr(store, '_get_modulestore_by_course_id'):
+        store = store._get_modulestore_by_course_id(course_id)
     try:
         if hasattr(store, 'begin_bulk_write_operation_on_course'):
             store.begin_bulk_write_operation_on_course(course_id)
