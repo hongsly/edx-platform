@@ -16,7 +16,7 @@ from contentstore.tests.utils import AjaxEnabledTestClient
 from student.tests.factories import UserFactory
 from student.roles import CourseInstructorRole, CourseStaffRole, GlobalStaff, OrgStaffRole, OrgInstructorRole
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
-from xmodule.modulestore.tests.factories import CourseFactory
+from xmodule.modulestore.tests.factories import CourseFactory, check_mongo_calls
 from xmodule.modulestore import MONGO_MODULESTORE_TYPE
 from opaque_keys.edx.locations import SlashSeparatedCourseKey
 from xmodule.modulestore.django import modulestore
@@ -200,16 +200,11 @@ class TestCourseListing(ModuleStoreTestCase):
 
         # Now count the db queries
         store = modulestore()._get_modulestore_by_type(MONGO_MODULESTORE_TYPE)
-        # find is called for reading (incl for find_one)
-        find_wrap = Mock(wraps=store.collection.find)
-        with patch.object(store.collection, 'find', find_wrap):
+        with check_mongo_calls(store.collection, USER_COURSES_COUNT):
             courses_list = _accessible_courses_list_from_groups(self.request)
-            self.assertLessEqual(find_wrap.call_count, USER_COURSES_COUNT)
 
-        find_wrap.reset_mock()
-        with patch.object(store.collection, 'find', find_wrap):
+        with check_mongo_calls(store.collection, 1):
             courses_list = _accessible_courses_list(self.request)
-            self.assertLessEqual(find_wrap.call_count, 1)
 
     def test_get_course_list_with_same_course_id(self):
         """

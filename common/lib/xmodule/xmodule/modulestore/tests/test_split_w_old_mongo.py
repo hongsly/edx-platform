@@ -59,21 +59,7 @@ class SplitWMongoCourseBoostrapper(unittest.TestCase):
         self.addCleanup(self.tear_down_mongo)
         self.old_course_key = None
         self.runtime = None
-        # setup mocks for counting accesses
-        # can't use @patch.object b/c can't access self in annotation
-        # send_msg is called for insert, update, and remove
-        self.send_msg_wrap = Mock(wraps=self.draft_mongo.database.connection._send_message)
-        # find is called for reading (incl for find_one)
-        self.find_wrap = Mock(wraps=self.draft_mongo.collection.find)
-
-        import cProfile
-        pr = cProfile.Profile()
-        pr.enable()
-        try:
-            self._create_course()
-        finally:
-            pr.disable()
-            pr.dump_stats("profiles/create_course_mixed_ms{0}.profile".format(uuid.uuid4()))
+        self._create_course()
 
     def tear_down_split(self):
         """

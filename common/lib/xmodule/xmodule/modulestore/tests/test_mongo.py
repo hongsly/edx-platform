@@ -34,7 +34,7 @@ from xmodule.exceptions import NotFoundError
 from git.test.lib.asserts import assert_not_none
 from xmodule.x_module import XModuleMixin
 from xmodule.modulestore.mongo.base import as_draft
-from mock import Mock, patch
+from xmodule.modulestore.tests.factories import check_mongo_calls
 
 
 log = logging.getLogger(__name__)
@@ -240,12 +240,8 @@ class TestMongoModuleStore(unittest.TestCase):
 
     def test_path_to_location(self):
         '''Make sure that path_to_location works'''
-        # setup mocks for counting accesses
-        # find is called for reading (incl for find_one)
-        find_wrap = Mock(wraps=self.draft_store.collection.find)
-        with patch.object(self.draft_store.collection, 'find', find_wrap):
+        with check_mongo_calls(self.draft_store, 9):
             check_path_to_location(self.draft_store)
-            self.assertLessEqual(find_wrap.call_count, 9)
 
     def test_xlinter(self):
         '''
