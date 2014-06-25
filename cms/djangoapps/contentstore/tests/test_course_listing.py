@@ -199,17 +199,17 @@ class TestCourseListing(ModuleStoreTestCase):
         self.assertGreaterEqual(iteration_over_courses_time_2.elapsed, iteration_over_groups_time_2.elapsed)
 
         # Now count the db queries
-        store = modulestore('direct')
+        store = modulestore()._get_modulestore_by_type(MONGO_MODULESTORE_TYPE)
         # find is called for reading (incl for find_one)
         find_wrap = Mock(wraps=store.collection.find)
         with patch.object(store.collection, 'find', find_wrap):
             courses_list = _accessible_courses_list_from_groups(self.request)
-            self.assertLessEqual(find_wrap.call_count, USER_COURSES_COUNT * 2)
+            self.assertLessEqual(find_wrap.call_count, USER_COURSES_COUNT)
 
         find_wrap.reset_mock()
         with patch.object(store.collection, 'find', find_wrap):
             courses_list = _accessible_courses_list(self.request)
-            self.assertLessEqual(find_wrap.call_count, 2)
+            self.assertLessEqual(find_wrap.call_count, 1)
 
     def test_get_course_list_with_same_course_id(self):
         """

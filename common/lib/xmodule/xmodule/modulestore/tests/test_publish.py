@@ -57,11 +57,11 @@ class TestPublish(SplitWMongoCourseBoostrapper):
                         self._create_item('course_info', 'updates', "<ol><li><h2>Sep 22</h2><p>test</p></li></ol>", {}, None, None, split=False)
 
                         # There should be 12 inserts and 11 updates
-                        self.assertLessEqual(self.send_msg_wrap.call_count, 23)
+                        self.assertLessEqual(self.send_msg_wrap.call_count, 27)
                         # Should be 1 to verify course unique, 11 parent fetches,
                         # and n per _create_item where n is the size of the course tree non-leaf nodes
                         # for inheritance computation (which is 7*4 + sum(1..4) = 38)
-                        self.assertLessEqual(self.find_wrap.call_count, 55)
+                        self.assertLessEqual(self.find_wrap.call_count, 70)
         self.send_msg_wrap.reset_mock()
         self.find_wrap.reset_mock()
 
@@ -75,10 +75,10 @@ class TestPublish(SplitWMongoCourseBoostrapper):
         with patch.object(self.draft_mongo.database.connection, '_send_message', self.send_msg_wrap):
             with patch.object(self.draft_mongo.collection, 'find', self.find_wrap):
                 self.draft_mongo.publish(item.location, self.userid)
-                # Vert1 has 3 children; so, publishes 4 nodes which may mean 4 inserts & removes?
-                self.assertLessEqual(self.send_msg_wrap.call_count, 8)
-                # 25-June-2014 find calls are 26. Probably due to inheritance recomputation?
-                self.assertLessEqual(self.find_wrap.call_count, 26)
+                # Vert1 has 3 children; so, publishes 4 nodes which may mean 4 inserts & 1 bulk remove
+                self.assertLessEqual(self.send_msg_wrap.call_count, 5)
+                # 25-June-2014 find calls are 19. Probably due to inheritance recomputation?
+                self.assertLessEqual(self.find_wrap.call_count, 19)
         self.send_msg_wrap.reset_mock()
         self.find_wrap.reset_mock()
 
