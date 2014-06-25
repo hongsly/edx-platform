@@ -21,8 +21,9 @@ from xblock.fragment import Fragment
 
 import xmodule
 from xmodule.tabs import StaticTab, CourseTabList
-from xmodule.modulestore import PublishState
+from xmodule.modulestore import PublishState, ALL_REVISIONS
 from xmodule.modulestore.django import modulestore
+from xmodule.modulestore.draft import DIRECT_ONLY_CATEGORIES
 from xmodule.modulestore.exceptions import ItemNotFoundError, InvalidLocationError, DuplicateItemError
 from xmodule.modulestore.inheritance import own_metadata
 from xmodule.x_module import PREVIEW_VIEWS, STUDIO_VIEW
@@ -32,7 +33,6 @@ from util.json_request import expect_json, JsonResponse
 from .access import has_course_access
 from .helpers import xblock_has_own_studio_page
 from contentstore.utils import compute_publish_state
-from xmodule.modulestore.draft import DIRECT_ONLY_CATEGORIES
 from contentstore.views.preview import get_preview_fragment
 from edxmako.shortcuts import render_to_string
 from models.settings.course_grading import CourseGradingModel
@@ -527,7 +527,7 @@ def orphan_handler(request, course_key_string):
                 # get_orphans returns the deprecated string format w/o revision
                 usage_key = course_usage_key.make_usage_key_from_deprecated_string(itemloc)
                 # need to delete all versions
-                store.delete_item(usage_key, request.user.id, revision='all')
+                store.delete_item(usage_key, request.user.id, revision=ALL_REVISIONS)
             return JsonResponse({'deleted': items})
         else:
             raise PermissionDenied()
