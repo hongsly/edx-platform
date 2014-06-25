@@ -33,10 +33,7 @@ def delete_course_and_groups(course_id, commit=False):
     module_store = modulestore()
     content_store = contentstore()
 
-    with store_bulk_write_operations_on_course(
-        module_store._get_modulestore_for_courseid(course_id),
-        course_id
-    ):
+    with store_bulk_write_operations_on_course(module_store, course_id):
         if delete_course(module_store, content_store, course_id, commit):
 
             print 'removing User permissions from course....'

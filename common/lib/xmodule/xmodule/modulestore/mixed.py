@@ -490,8 +490,7 @@ def store_bulk_write_operations_on_course(store, course_id):
     In the case of Mongo, it temporarily disables refreshing the metadata inheritance tree
     until the bulk operation is completed.
 
-    Note: to be effective, the store must be a direct pointer to the underlying store;
-        not the intermediary Mixed store.
+    The store can be either the Mixed modulestore or a direct pointer to the underlying store.
     """
 
     # TODO
@@ -499,8 +498,11 @@ def store_bulk_write_operations_on_course(store, course_id):
     # Right now, only Import Course, Clone Course, and Delete Course use this, so
     # it's ok if the cached metadata in the memcache is invalid when another
     # request comes in for the same course.
+
+    # if the caller passed in the mixed modulestore, get a direct pointer to the underlying store
     if hasattr(store, '_get_modulestore_by_course_id'):
         store = store._get_modulestore_by_course_id(course_id)
+
     try:
         if hasattr(store, 'begin_bulk_write_operation_on_course'):
             store.begin_bulk_write_operation_on_course(course_id)
