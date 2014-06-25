@@ -7,9 +7,10 @@ from collections import namedtuple
 
 from xmodule.tests import DATA_DIR
 from opaque_keys.edx.locations import Location
-from xmodule.modulestore import MONGO_MODULESTORE_TYPE, SPLIT_MONGO_MODULESTORE_TYPE, XML_MODULESTORE_TYPE
+from xmodule.modulestore import (
+    MONGO_MODULESTORE_TYPE, SPLIT_MONGO_MODULESTORE_TYPE, XML_MODULESTORE_TYPE, DRAFT, PUBLISHED
+)
 from xmodule.modulestore.exceptions import ItemNotFoundError
-from xmodule.modulestore.mongo.base import DRAFT, DRAFT_ONLY, PUBLISHED, PUBLISHED_ONLY
 
 from opaque_keys.edx.locator import BlockUsageLocator, CourseLocator
 from xmodule.modulestore.tests.test_location_mapper import LocMapperSetupSansDjango, loc_mapper
@@ -527,6 +528,6 @@ def create_modulestore_instance(engine, doc_store_config, options, i18n_service=
 
     return class_(
         doc_store_config=doc_store_config,
-        branch_setting_func=lambda: 'draft',
+        branch_setting_func=lambda: DRAFT,
         **options
     )

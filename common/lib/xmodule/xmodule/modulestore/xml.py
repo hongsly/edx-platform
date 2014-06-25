@@ -19,6 +19,7 @@ from xmodule.errortracker import make_error_tracker, exc_info_to_str
 from xmodule.mako_module import MakoDescriptorSystem
 from xmodule.x_module import XMLParsingSystem, policy_key
 from xmodule.modulestore.xml_exporter import DEFAULT_CONTENT_FIELDS
+from xmodule.modulestore import PUBLISHED
 from xmodule.tabs import CourseTabList
 from opaque_keys.edx.keys import UsageKey
 from opaque_keys.edx.locations import SlashSeparatedCourseKey
@@ -410,7 +411,7 @@ class XMLModuleStore(ModuleStoreReadBase):
         self.i18n_service = i18n_service
 
         # The XML Module Store is a read-only store and only handles published content
-        self.branch_setting_func = lambda: 'published'
+        self.branch_setting_func = lambda: PUBLISHED
 
         # If we are specifically asked for missing courses, that should
         # be an error.  If we are asked for "all" courses, find the ones

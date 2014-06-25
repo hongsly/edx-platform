@@ -25,9 +25,30 @@ from xblock.core import XBlock
 
 log = logging.getLogger('edx.modulestore')
 
+# Modulestore Types
+
 SPLIT_MONGO_MODULESTORE_TYPE = 'split'
 MONGO_MODULESTORE_TYPE = 'mongo'
 XML_MODULESTORE_TYPE = 'xml'
+
+
+# Revision constants
+
+# this is equivalent to 'draft-preferred' since both DRAFT and PUBLISHED
+# versions are returned, with precedence to DRAFT versions
+DRAFT = 'draft'
+
+# this is equivalent to PUBLISHED_ONLY since only PUBLISHED versions are returned
+PUBLISHED = 'published'
+
+# only DRAFT versions are returned and no PUBLISHED versions
+DRAFT_ONLY = 'draft-only'
+
+# only PUBLISHED versions are returned and no DRAFT versions
+PUBLISHED_ONLY = 'published-only'
+
+# all revisions are treated
+ALL_REVISIONS = 'all'
 
 
 class PublishState(object):

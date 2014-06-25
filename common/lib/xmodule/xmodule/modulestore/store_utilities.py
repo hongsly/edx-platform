@@ -2,6 +2,7 @@ import re
 import logging
 
 from xmodule.contentstore.content import StaticContent
+from xmodule.modulestore import PUBLISHED_ONLY, DRAFT_ONLY
 
 
 def _prefix_only_url_replace_regex(prefix):
@@ -135,12 +136,12 @@ def clone_course(modulestore, contentstore, source_course_id, dest_course_id, us
         raise Exception("Cannot find a course at {0}. Aborting".format(source_course_id))
 
     # Get all modules under this namespace which is (tag, org, course) tuple
-    modules = modulestore.get_items(source_course_id, revision='published-only')
+    modules = modulestore.get_items(source_course_id, revision=PUBLISHED_ONLY)
     _clone_modules(modulestore, modules, source_course_id, dest_course_id, user_id)
     course_location = dest_course_id.make_usage_key('course', dest_course_id.run)
     modulestore.publish(course_location, user_id)
 
-    modules = modulestore.get_items(source_course_id, revision='draft-only')
+    modules = modulestore.get_items(source_course_id, revision=DRAFT_ONLY)
     _clone_modules(modulestore, modules, source_course_id, dest_course_id, user_id)
 
     # now iterate through all of the assets and clone them

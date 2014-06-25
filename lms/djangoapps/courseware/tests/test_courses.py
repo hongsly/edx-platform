@@ -7,6 +7,7 @@ import mock
 from django.test.utils import override_settings
 from student.tests.factories import UserFactory
 import xmodule.modulestore.django as store_django
+from xmodule.modulestore import DRAFT
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
 from xmodule.tests.xml import factories as xml
@@ -61,18 +62,18 @@ class ModuleStoreBranchSettingTest(ModuleStoreTestCase):
         mock.Mock(return_value='preview.localhost')
     )
     @override_settings(
-        HOSTNAME_MODULESTORE_DEFAULT_MAPPINGS={r'preview\.': 'draft'},
+        HOSTNAME_MODULESTORE_DEFAULT_MAPPINGS={r'preview\.': DRAFT},
         MODULESTORE_BRANCH='fake_default_branch',
     )
     def test_default_modulestore_preview_mapping(self):
-        self.assertEqual(store_django._get_modulestore_branch_setting(), 'draft')
+        self.assertEqual(store_django._get_modulestore_branch_setting(), DRAFT)
 
     @mock.patch(
         'xmodule.modulestore.django.get_current_request_hostname',
         mock.Mock(return_value='localhost')
     )
     @override_settings(
-        HOSTNAME_MODULESTORE_DEFAULT_MAPPINGS={r'preview\.': 'draft'},
+        HOSTNAME_MODULESTORE_DEFAULT_MAPPINGS={r'preview\.': DRAFT},
         MODULESTORE_BRANCH='fake_default_branch',
     )
     def test_default_modulestore_branch_mapping(self):

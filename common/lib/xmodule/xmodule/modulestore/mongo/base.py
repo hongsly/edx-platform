@@ -33,7 +33,7 @@ from xblock.runtime import KvsFieldData
 from xblock.exceptions import InvalidScopeError
 from xblock.fields import Scope, ScopeIds, Reference, ReferenceList, ReferenceValueDict
 
-from xmodule.modulestore import ModuleStoreWriteBase, MONGO_MODULESTORE_TYPE
+from xmodule.modulestore import ModuleStoreWriteBase, MONGO_MODULESTORE_TYPE, PUBLISHED, DRAFT
 from opaque_keys.edx.locations import Location
 from xmodule.modulestore.exceptions import ItemNotFoundError, InvalidLocationError, ReferentialIntegrityError
 from xmodule.modulestore.inheritance import own_metadata, InheritanceMixin, inherit_metadata, InheritanceKeyValueStore
@@ -282,26 +282,8 @@ def location_to_query(location, wildcard=True, tag='i4x'):
     return query
 
 
-# Things w/ these categories should never be marked as version='draft'
+# Things w/ these categories should never be marked as version=DRAFT
 DIRECT_ONLY_CATEGORIES = ['course', 'chapter', 'sequential', 'about', 'static_tab', 'course_info']
-
-# Revision constants
-
-# this is equivalent to 'draft-preferred' since both DRAFT and PUBLISHED
-# versions are returned, with precedence to DRAFT versions
-DRAFT = 'draft'
-
-# this is equivalent to 'published-only' since only PUBLISHED versions are returned
-PUBLISHED = 'published'
-
-# only DRAFT versions are returned and no PUBLISHED versions
-DRAFT_ONLY = 'draft-only'
-
-# only PUBLISHED versions are returned and no DRAFT versions
-PUBLISHED_ONLY = 'published-only'
-
-# all revisions are treated
-ALL_REVISIONS = 'all'
 
 # sort order that returns DRAFT items first
 SORT_REVISION_FAVOR_DRAFT = ('_id.revision', pymongo.DESCENDING)

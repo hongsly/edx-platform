@@ -27,7 +27,7 @@ from xmodule.contentstore.content import StaticContent
 from xmodule.contentstore.django import contentstore, _CONTENTSTORE
 from xmodule.contentstore.utils import restore_asset_from_trashcan, empty_asset_trashcan
 from xmodule.exceptions import NotFoundError, InvalidVersionError
-from xmodule.modulestore import mongo, MONGO_MODULESTORE_TYPE, PublishState
+from xmodule.modulestore import mongo, MONGO_MODULESTORE_TYPE, PublishState, PUBLISHED, PUBLISHED_ONLY, DRAFT_ONLY
 from xmodule.modulestore.mixed import store_branch_setting
 from xmodule.modulestore.django import modulestore
 from xmodule.modulestore.exceptions import ItemNotFoundError
@@ -201,13 +201,13 @@ class ContentStoreToyCourseTest(ContentStoreTestCase):
         store.convert_to_draft(html_module_from_draft_store.location, self.user.id)
 
         # Query get_items() and find the html item. This should just return back a single item (not 2).
-        direct_store_items = store.get_items(course_key, revision='published-only')
+        direct_store_items = store.get_items(course_key, revision=PUBLISHED_ONLY)
         html_items_from_direct_store = [item for item in direct_store_items if (item.location == html_usage_key)]
         self.assertEqual(len(html_items_from_direct_store), 1)
         self.assertFalse(getattr(html_items_from_direct_store[0], 'is_draft', False))
 
         # Fetch from the draft store.
-        draft_store_items = store.get_items(course_key, revision='draft-only')
+        draft_store_items = store.get_items(course_key, revision=DRAFT_ONLY)
         html_items_from_draft_store = [item for item in draft_store_items if (item.location == html_usage_key)]
         self.assertEqual(len(html_items_from_draft_store), 1)
         self.assertTrue(getattr(html_items_from_draft_store[0], 'is_draft', False))
@@ -640,7 +640,7 @@ class ContentStoreToyCourseTest(ContentStoreTestCase):
         source_course_id = course_items[0].id
         dest_course_id = _get_course_id(course_data)
 
-        # get a vertical (and components in it) to put into 'draft'
+        # get a vertical (and components in it) to put into DRAFT
         # this is to assert that draft content is also cloned over
         vertical = module_store.get_item(
             source_course_id.make_usage_key('vertical', 'vertical_test'),
@@ -660,9 +660,9 @@ class ContentStoreToyCourseTest(ContentStoreTestCase):
         clone_course(module_store, content_store, source_course_id, dest_course_id, self.user.id)
 
         # first assert that all draft content got cloned as well
-        draft_items = module_store.get_items(source_course_id, revision='draft-only')
+        draft_items = module_store.get_items(source_course_id, revision=DRAFT_ONLY)
         self.assertGreater(len(draft_items), 0)
-        draft_clone_items = module_store.get_items(dest_course_id, revision='draft-only')
+        draft_clone_items = module_store.get_items(dest_course_id, revision=DRAFT_ONLY)
         self.assertGreater(len(draft_clone_items), 0)
         self.assertEqual(len(draft_items), len(draft_clone_items))
 
@@ -791,7 +791,7 @@ class ContentStoreToyCourseTest(ContentStoreTestCase):
 
         course_id = course_items[0].id
 
-        # get a vertical (and components in it) to put into 'draft'
+        # get a vertical (and components in it) to put into DRAFT
         vertical = module_store.get_item(course_id.make_usage_key('vertical', 'vertical_test'), depth=1)
 
         module_store.convert_to_draft(vertical.location, self.user.id)
@@ -842,7 +842,7 @@ class ContentStoreToyCourseTest(ContentStoreTestCase):
         orphan_vertical = module_store.get_item(vertical.location)
         self.assertEqual(orphan_vertical.location.name, 'no_references')
 
-        # get the original vertical (and components in it) to put into 'draft'
+        # get the original vertical (and components in it) to put into DRAFT
         vertical = module_store.get_item(course_id.make_usage_key('vertical', 'vertical_test'), depth=1)
         self.assertEqual(len(orphan_vertical.children), len(vertical.children))
         draft_vertical = module_store.convert_to_draft(vertical.location, self.user.id)
@@ -936,7 +936,7 @@ class ContentStoreToyCourseTest(ContentStoreTestCase):
             target_course_id=course_id,
         )
 
-        items = module_store.get_items(course_id, category='vertical', revision='published-only')
+        items = module_store.get_items(course_id, category='vertical', revision=PUBLISHED_ONLY)
         self._check_verticals(items)
 
         def verify_item_publish_state(item, publish_state):
@@ -1129,7 +1129,7 @@ class ContentStoreToyCourseTest(ContentStoreTestCase):
         mongo_store.collection.find = wrapper.find
 
         # set the branch to 'publish' in order to prevent extra lookups of draft versions
-        with store_branch_setting(mongo_store, 'published'):
+        with store_branch_setting(mongo_store, PUBLISHED):
             course = mongo_store.get_course(course_id, depth=2)
 
             # make sure we haven't done too many round trips to DB

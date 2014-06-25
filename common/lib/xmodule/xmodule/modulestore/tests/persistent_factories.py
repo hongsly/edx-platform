@@ -1,4 +1,4 @@
-from xmodule.modulestore import SPLIT_MONGO_MODULESTORE_TYPE
+from xmodule.modulestore import SPLIT_MONGO_MODULESTORE_TYPE, DRAFT
 from xmodule.course_module import CourseDescriptor
 from xmodule.x_module import XModuleDescriptor
 import factory
@@ -25,7 +25,7 @@ class PersistentCourseFactory(SplitFactory):
     keywords: any xblock field plus (note, the below are filtered out; so, if they
     become legitimate xblock fields, they won't be settable via this factory)
     * org: defaults to textX
-    * master_branch: (optional) defaults to 'draft'
+    * master_branch: (optional) defaults to DRAFT
     * user_id: (optional) defaults to 'test_user'
     * display_name (xblock field): will default to 'Robot Super Course' unless provided
     """
@@ -34,7 +34,7 @@ class PersistentCourseFactory(SplitFactory):
     # pylint: disable=W0613
     @classmethod
     def _create(cls, target_class, offering='999', org='testX', user_id='test_user',
-                master_branch='draft', **kwargs):
+                master_branch=DRAFT, **kwargs):
 
         modulestore = kwargs.pop('modulestore')
         root_block_id = kwargs.pop('root_block_id', 'course')

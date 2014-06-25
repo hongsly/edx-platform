@@ -7,7 +7,7 @@ import lxml.etree
 from xblock.fields import Scope
 from xmodule.contentstore.content import StaticContent
 from xmodule.exceptions import NotFoundError
-from xmodule.modulestore import EdxJSONEncoder
+from xmodule.modulestore import EdxJSONEncoder, PUBLISHED, DRAFT, DRAFT_ONLY
 from xmodule.modulestore.inheritance import own_metadata
 from xmodule.modulestore.mixed import store_branch_setting
 from fs.osfs import OSFS
@@ -45,7 +45,7 @@ def export_to_xml(modulestore, contentstore, course_key, root_dir, course_dir):
     root = lxml.etree.Element('unknown')
 
     # export only the published content
-    with store_branch_setting(course.runtime.modulestore, 'published'):
+    with store_branch_setting(course.runtime.modulestore, PUBLISHED):
         course.add_xml_to_node(root)
 
     with export_fs.open('course.xml', 'w') as course_xml:
@@ -105,11 +105,11 @@ def export_to_xml(modulestore, contentstore, course_key, root_dir, course_dir):
     # should we change the application, then this assumption will no longer be valid
     # NOTE: we need to explicitly implement the logic for setting the vertical's parent
     # and index here since the XML modulestore cannot load draft modules
-    draft_verticals = modulestore.get_items(course_key, category='vertical', revision='draft-only')
+    draft_verticals = modulestore.get_items(course_key, category='vertical', revision=DRAFT_ONLY)
     if len(draft_verticals) > 0:
         draft_course_dir = export_fs.makeopendir(DRAFT_DIR)
         for draft_vertical in draft_verticals:
-            parent_loc = modulestore.get_parent_location(draft_vertical.location, revision='draft')
+            parent_loc = modulestore.get_parent_location(draft_vertical.location, revision=DRAFT)
             # Don't try to export orphaned items.
             if parent_loc is not None:
                 logging.debug('parent_loc = {0}'.format(parent_loc))
@@ -185,7 +185,7 @@ def convert_between_versions(source_dir, target_dir):
 
         shutil.copytree(published_dir, copy_root)
 
-        # If there is a "draft" branch, copy it. All other branches are ignored.
+        # If there is a DRAFT branch, copy it. All other branches are ignored.
         copy_drafts()
 
     def copy_drafts():

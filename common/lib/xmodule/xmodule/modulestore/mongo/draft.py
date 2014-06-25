@@ -9,12 +9,11 @@ and otherwise returns i4x://org/course/cat/name).
 import pymongo
 
 from xmodule.exceptions import InvalidVersionError
-from xmodule.modulestore import PublishState
+from xmodule.modulestore import PublishState, DRAFT, PUBLISHED, DRAFT_ONLY, PUBLISHED_ONLY, ALL_REVISIONS
 from xmodule.modulestore.exceptions import ItemNotFoundError, DuplicateItemError, InvalidBranchSetting
 from xmodule.modulestore.mongo.base import (
     MongoModuleStore, as_draft, as_published,
-    DIRECT_ONLY_CATEGORIES, DRAFT, PUBLISHED, DRAFT_ONLY, PUBLISHED_ONLY, ALL_REVISIONS,
-    SORT_REVISION_FAVOR_DRAFT
+    DIRECT_ONLY_CATEGORIES, SORT_REVISION_FAVOR_DRAFT,
 )
 from opaque_keys.edx.locations import Location
 
@@ -187,7 +186,7 @@ class DraftModuleStore(MongoModuleStore):
                     If the draft has a different parent than the published, it returns only
                     the draft's parent. Because parents don't record their children's revisions, this
                     is actually a potentially fragile deduction based on parent type. If the parent type
-                    is not DIRECT_ONLY, then the parent revision must be 'draft'.
+                    is not DIRECT_ONLY, then the parent revision must be DRAFT.
                     Only xml_exporter currently uses this argument. Others should avoid it.
         '''
         if revision is None:
@@ -614,9 +613,9 @@ class DraftModuleStore(MongoModuleStore):
 
     def compute_publish_state(self, xblock):
         """
-        Returns whether this xblock is 'draft', 'public', or 'private'.
+        Returns whether this xblock is DRAFT, 'public', or 'private'.
 
-        'draft' content is in the process of being edited, but still has a previous
+        DRAFT content is in the process of being edited, but still has a previous
             version deployed to LMS
         'public' content is locked and deployed to LMS
         'private' content is editable and not deployed to LMS

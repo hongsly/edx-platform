@@ -17,6 +17,7 @@ from .store_utilities import rewrite_nonportable_content_links
 import xblock
 from xmodule.tabs import CourseTabList
 from xmodule.modulestore.exceptions import InvalidLocationError
+from xmodule.modulestore import DRAFT_ONLY
 
 log = logging.getLogger(__name__)
 
@@ -307,7 +308,7 @@ def import_from_xml(
             # finally, publish the course
             store.publish(course.location, user_id)
 
-            # now import any 'draft' items
+            # now import any DRAFT items
             _import_course_draft(
                 xml_module_store,
                 store,
@@ -501,10 +502,10 @@ def _import_course_draft(
                 course_key = descriptor.location.course_key
                 try:
                     def _import_module(module):
-                        # Update the module's location to "draft" revision
+                        # Update the module's location to DRAFT revision
                         # We need to call this method (instead of updating the location directly)
                         # to ensure that pure XBlock field data is updated correctly.
-                        _update_module_location(module, module.location.replace(revision='draft-only'))
+                        _update_module_location(module, module.location.replace(revision=DRAFT_ONLY))
 
                         # make sure our parent has us in its list of children
                         # this is to make sure private only verticals show up

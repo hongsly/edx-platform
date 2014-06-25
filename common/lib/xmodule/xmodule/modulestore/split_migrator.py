@@ -7,7 +7,7 @@ In general, it's strategy is to treat the other modulestores as read-only and to
 manipulate storage but use existing api's.
 '''
 from xblock.fields import Reference, ReferenceList, ReferenceValueDict
-from xmodule.modulestore.mongo.base import DRAFT
+from xmodule.modulestore import DRAFT, PUBLISHED
 
 
 class SplitMigrator(object):
@@ -82,10 +82,10 @@ class SplitMigrator(object):
                     fields=self._get_json_fields_translate_references(module, course_key, True),
                     continue_version=True
                 )
-        # after done w/ published items, add version for 'draft' pointing to the published structure
+        # after done w/ published items, add version for DRAFT pointing to the published structure
         index_info = self.split_modulestore.get_course_index_info(course_version_locator)
         versions = index_info['versions']
-        versions['draft'] = versions['published']
+        versions[DRAFT] = versions[PUBLISHED]
         self.split_modulestore.update_course_index(index_info)
 
         # clean up orphans in published version: in old mongo, parents pointed to the union of their published and draft
@@ -98,7 +98,7 @@ class SplitMigrator(object):
         """
         # each true update below will trigger a new version of the structure. We may want to just have one new version
         # but that's for a later date.
-        new_draft_course_loc = published_course_key.for_branch('draft')
+        new_draft_course_loc = published_course_key.for_branch(DRAFT)
         # to prevent race conditions of grandchilden being added before their parents and thus having no parent to
         # add to
         awaiting_adoption = {}

@@ -60,7 +60,7 @@ from opaque_keys.edx.locator import (
 )
 from xmodule.modulestore.exceptions import InsufficientSpecificationError, VersionConflictError, DuplicateItemError, \
     DuplicateCourseError
-from xmodule.modulestore import inheritance, ModuleStoreWriteBase, SPLIT_MONGO_MODULESTORE_TYPE
+from xmodule.modulestore import inheritance, ModuleStoreWriteBase, SPLIT_MONGO_MODULESTORE_TYPE, PUBLISHED, DRAFT
 
 from ..exceptions import ItemNotFoundError
 from .definition_lazy_loader import DefinitionLazyLoader
@@ -294,7 +294,7 @@ class SplitMongoModuleStore(ModuleStoreWriteBase):
         }
         return envelope
 
-    def get_courses(self, branch='draft', qualifiers=None):
+    def get_courses(self, branch=DRAFT, qualifiers=None):
         '''
         Returns a list of course descriptors matching any given qualifiers.
 
@@ -302,9 +302,9 @@ class SplitMongoModuleStore(ModuleStoreWriteBase):
         legal query for mongo to use against the active_versions collection.
 
         Note, this is to find the current head of the named branch type
-        (e.g., 'draft'). To get specific versions via guid use get_course.
+        (e.g., DRAFT). To get specific versions via guid use get_course.
 
-        :param branch: the branch for which to return courses. Default value is 'draft'.
+        :param branch: the branch for which to return courses. Default value is DRAFT.
         :param qualifiers: an optional dict restricting which elements should match
         '''
         if qualifiers is None:
@@ -383,9 +383,9 @@ class SplitMongoModuleStore(ModuleStoreWriteBase):
         :param usage_key: the block to check
         :return: True if the draft and published versions differ
         """
-        draft = self.get_item(usage_key.for_branch("draft"))
+        draft = self.get_item(usage_key.for_branch(DRAFT))
         try:
-            published = self.get_item(usage_key.for_branch("published"))
+            published = self.get_item(usage_key.for_branch(PUBLISHED))
         except ItemNotFoundError:
             return True
 
@@ -870,7 +870,7 @@ class SplitMongoModuleStore(ModuleStoreWriteBase):
 
     def create_course(
         self, org, offering, user_id, fields=None,
-        master_branch='draft', versions_dict=None, root_category='course',
+        master_branch=DRAFT, versions_dict=None, root_category='course',
         root_block_id='course', **kwargs
     ):
         """
@@ -903,10 +903,10 @@ class SplitMongoModuleStore(ModuleStoreWriteBase):
         when
         loaded.
 
-        master_branch: the tag (key) for the version name in the dict which is the 'draft' version. Not the actual
+        master_branch: the tag (key) for the version name in the dict which is the DRAFT version. Not the actual
         version guid, but what to call it.
 
-        versions_dict: the starting version ids where the keys are the tags such as 'draft' and 'published'
+        versions_dict: the starting version ids where the keys are the tags such as DRAFT and PUBLISHED
         and the values are structure guids. If provided, the new course will reuse this version (unless you also
         provide any fields overrides, see above). if not provided, will create a mostly empty course
         structure with just a category course root xblock.
@@ -1295,7 +1295,7 @@ class SplitMongoModuleStore(ModuleStoreWriteBase):
         self._update_head(index_entry, destination_course.branch, destination_structure['_id'])
 
     def unpublish(self, location, user_id):
-        published_location = location.replace(branch='published')
+        published_location = location.replace(branch=PUBLISHED)
         self.delete_item(published_location, user_id)
 
     def update_course_index(self, updated_index_entry):
@@ -1798,9 +1798,9 @@ class SplitMongoModuleStore(ModuleStoreWriteBase):
 
     def compute_publish_state(self, xblock):
         """
-        Returns whether this xblock is 'draft', 'public', or 'private'.
+        Returns whether this xblock is DRAFT, 'public', or 'private'.
 
-        'draft' content is in the process of being edited, but still has a previous
+        DRAFT content is in the process of being edited, but still has a previous
             version visible in the LMS
         'public' content is locked and visible in the LMS
         'private' content is editable and not visible in the LMS

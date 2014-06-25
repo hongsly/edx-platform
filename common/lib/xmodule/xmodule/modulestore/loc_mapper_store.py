@@ -7,6 +7,7 @@ import pymongo
 import bson.son
 import urllib
 
+from xmodule.modulestore import PUBLISHED, DRAFT
 from xmodule.modulestore.exceptions import InvalidLocationError, ItemNotFoundError
 from opaque_keys.edx.locator import BlockUsageLocator, CourseLocator
 from opaque_keys.edx.locations import SlashSeparatedCourseKey
@@ -53,7 +54,7 @@ class LocMapperStore(object):
         self.cache = cache
 
     # location_map functions
-    def create_map_entry(self, course_key, org=None, offering=None, draft_branch='draft', prod_branch='published',
+    def create_map_entry(self, course_key, org=None, offering=None, draft_branch=DRAFT, prod_branch=PUBLISHED,
                          block_map=None):
         """
         Add a new entry to map this SlashSeparatedCourseKey to the new style CourseLocator.org & offering. If
