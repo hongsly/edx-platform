@@ -355,7 +355,7 @@ def import_module(
     # Move the module to a new course
     new_usage_key = module.scope_ids.usage_id.map_into_course(dest_course_id)
     if new_usage_key.block_type == 'course':
-        new_usage_key = new_usage_key.replace(name=dest_course_id.run)
+        new_usage_key = new_usage_key.replace(block_id=dest_course_id.run)
     new_module = store.create_xmodule(new_usage_key, system=system)
 
     def _convert_reference_fields_to_new_namespace(reference):
