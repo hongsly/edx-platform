@@ -1,4 +1,3 @@
-from itertools import repeat
 from .exceptions import (ItemNotFoundError, NoPathToItem)
 
 
