@@ -133,7 +133,7 @@ class CourseEndingTest(TestCase):
 
 
 @override_settings(MODULESTORE=TEST_DATA_MIXED_MODULESTORE)
-class DashboardTest(TestCase):
+class DashboardTest(ModuleStoreTestCase):
     """
     Tests for dashboard utility functions
     """
