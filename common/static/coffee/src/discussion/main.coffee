@@ -13,7 +13,8 @@ if Backbone?
       window.user = new DiscussionUser(user_info)
       Content.loadContentInfos(content_info)
       discussion = new Discussion(threads, {pages: thread_pages, sort: sort_preference})
-      new DiscussionRouter({discussion: discussion})
+      course = new DiscussionCourse(element.data("discussion_course"))
+      new DiscussionRouter({discussion: discussion, course: course})
       Backbone.history.start({pushState: true, root: "/courses/#{$$course_id}/discussion/forum/"})
   DiscussionProfileApp =
     start: (elem) ->

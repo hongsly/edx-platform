@@ -6,15 +6,23 @@ if Backbone?
 
     initialize: (options) ->
         @discussion = options['discussion']
+        @course = options['course']
+
         @nav = new DiscussionThreadListView(collection: @discussion, el: $(".sidebar"))
         @nav.on "thread:selected", @navigateToThread
         @nav.on "thread:removed", @navigateToAllThreads
         @nav.on "threads:rendered", @setActiveThread
+        @nav.on "thread:created", @navigateToThread
         @nav.render()
 
-        @newPostView = new NewPostView(el: $(".new-post-article"), collection: @discussion)
-        @nav.on "thread:created", @navigateToThread
         @newPost = $('.new-post-article')
+        @newPostView = new NewPostView(
+          el: @newPost,
+          collection: @discussion,
+          course: @course,
+          tab: true
+        )
+        @newPostView.render()
         $('.new-post-btn').bind "click", @showNewPost
         $('.new-post-btn').bind "keydown", (event) => DiscussionUtil.activateOnSpace(event, @showNewPost)
         $('.new-post-cancel').bind "click", @hideNewPost

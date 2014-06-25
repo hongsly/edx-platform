@@ -161,9 +161,26 @@ def inline_discussion(request, course_id, discussion_id):
         'allow_anonymous': allow_anonymous,
         'cohorts': cohorts_list,
         'is_moderator': is_moderator,
-        'is_cohorted': is_cohorted
+        'is_cohorted': is_cohorted,
+        'discussion_course': {
+            'is_cohorted': is_course_cohorted(course_id),
+            'allow_anonymous': course.allow_anonymous,
+            'allow_anonymous_to_peers': course.allow_anonymous_to_peers,
+            'cohorts': [{"id": str(g.id), "name": g.name} for g in cohorts],
+        }
     })
 
+
+def make_category_map(category_map, cohorted_commentables):
+    for _, entry in category_map["entries"].items():
+        if entry["id"] in cohorted_commentables:
+            entry["is_cohorted"] = True
+    for _, subcategory in category_map["subcategories"].items():
+        make_category_map(subcategory, cohorted_commentables)
+    # rename "children" to "names" - TODO do this earlier
+    #category_map["names"] = category_map["children"]
+    #del category_map["children"]
+    return category_map
 
 @login_required
 def forum_form_discussion(request, course_id):
@@ -221,12 +238,19 @@ def forum_form_discussion(request, course_id):
             'course_id': course.id.to_deprecated_string(),
             'category_map': category_map,
             'roles': saxutils.escape(json.dumps(utils.get_role_ids(course_id)), escapedict),
-            'is_moderator': cached_has_permission(request.user, "see_all_cohorts", course_id),
             'cohorts': cohorts,
             'user_cohort': user_cohort_id,
             'cohorted_commentables': cohorted_commentables,
             'is_course_cohorted': is_course_cohorted(course_id),
+            'is_moderator': json.dumps(cached_has_permission(request.user, "see_all_cohorts", course_id)),
             'sort_preference': user.default_sort_key,
+            'discussion_course': saxutils.escape(json.dumps({
+                'is_cohorted': is_course_cohorted(course_id),
+                'allow_anonymous': course.allow_anonymous,
+                'allow_anonymous_to_peers': course.allow_anonymous_to_peers,
+                'cohorts': [{"id": str(g.id), "name": g.name} for g in cohorts],
+                'category_map': make_category_map(category_map, cohorted_commentables),
+            }), escapedict)
         }
         # print "start rendering.."
         return render_to_response('discussion/index.html', context)
@@ -312,12 +336,19 @@ def single_thread(request, course_id, discussion_id, thread_id):
             'roles': saxutils.escape(json.dumps(utils.get_role_ids(course_id)), escapedict),
             'thread_pages': query_params['num_pages'],
             'is_course_cohorted': is_course_cohorted(course_id),
-            'is_moderator': cached_has_permission(request.user, "see_all_cohorts", course_id),
+            'is_moderator': json.dumps(cached_has_permission(request.user, "see_all_cohorts", course_id)),
             'flag_moderator': cached_has_permission(request.user, 'openclose_thread', course.id) or has_access(request.user, 'staff', course),
             'cohorts': cohorts,
             'user_cohort': get_cohort_id(request.user, course_id),
             'cohorted_commentables': cohorted_commentables,
             'sort_preference': cc_user.default_sort_key,
+            'discussion_course': saxutils.escape(json.dumps({
+                'is_cohorted': is_course_cohorted(course_id),
+                'allow_anonymous': course.allow_anonymous,
+                'allow_anonymous_to_peers': course.allow_anonymous_to_peers,
+                'cohorts': [{"id": str(g.id), "name": g.name} for g in cohorts],
+                'category_map': make_category_map(category_map, cohorted_commentables),
+            }), escapedict)
         }
         return render_to_response('discussion/index.html', context)
 

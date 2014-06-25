@@ -86,37 +86,35 @@ if Backbone?
       window.user = new DiscussionUser(response.user_info)
       Content.loadContentInfos(response.annotated_content_info)
       DiscussionUtil.loadRoles(response.roles)
-      allow_anonymous = response.allow_anonymous
-      allow_anonymous_to_peers = response.allow_anonymous_to_peers
-      cohorts = response.cohorts
-      # $elem.html("Hide Discussion")
+      DiscussionUtil.loadModerator(response.is_moderator)
+
+      @course = new DiscussionCourse(response.discussion_course)
       @discussion = new Discussion()
       @discussion.reset(response.discussion_data, {silent: false})
 
-      #use same discussion template but different thread templated
-      #determined in the coffeescript based on whether or not there's a
-      #group id
-      
-      if response.is_cohorted and response.is_moderator
-        source = "script#_inline_discussion_cohorted"
-      else
-        source = "script#_inline_discussion"
-      
-      $discussion = $(Mustache.render $(source).html(), {'threads':response.discussion_data, 'discussionId': discussionId, 'allow_anonymous_to_peers': allow_anonymous_to_peers, 'allow_anonymous': allow_anonymous, 'cohorts':cohorts})
+      $discussion = $(Mustache.render $("script#_inline_discussion").html(), {'threads':response.discussion_data, 'discussionId': discussionId})
       if @$('section.discussion').length
         @$('section.discussion').replaceWith($discussion)
       else
         @$el.append($discussion)
+
       @newPostForm = $('.new-post-article')
       @threadviews = @discussion.map (thread) ->
         new DiscussionThreadInlineView el: @$("article#thread_#{thread.id}"), model: thread
       _.each @threadviews, (dtv) -> dtv.render()
       DiscussionUtil.bulkUpdateContentInfo(window.$$annotated_content_info)
-      @newPostView = new NewPostInlineView el: @$('.new-post-article'), collection: @discussion
+      @newPostView = new NewPostView(
+        el: @newPostForm,
+        collection: @discussion,
+        course: @course
+      )
+      @newPostView.render()
       @discussion.on "add", @addThread
+
       @retrieved = true
       @showed = true
       @renderPagination(response.num_pages)
+
       if @isWaitingOnNewPost
         @newPostForm.show()
 

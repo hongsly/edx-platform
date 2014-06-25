@@ -21,11 +21,15 @@ class @DiscussionUtil
   @loadRoles: (roles)->
     @roleIds = roles
 
+  @loadModerator: (what)->
+    @isModerator = ((what=="True") or (what == 1))
+
   @loadFlagModerator: (what)->
     @isFlagModerator = ((what=="True") or (what == 1))
 
   @loadRolesFromContainer: ->
     @loadRoles($("#discussion-container").data("roles"))
+    @loadModerator($("#discussion-container").data("is-moderator"))
     @loadFlagModerator($("#discussion-container").data("flag-moderator"))
 
   @isStaff: (user_id) ->
