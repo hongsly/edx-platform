@@ -146,7 +146,7 @@ class LocMapperStore(object):
             entry = self._migrate_if_necessary([entry])[0]
 
         block_id = entry['block_map'].get(self.encode_key_for_mongo(location.name))
-        category = location.category
+        category = location.block_type
         if block_id is None:
             if add_entry_if_missing:
                 block_id = self._add_to_block_map(
@@ -318,13 +318,13 @@ class LocMapperStore(object):
                 # The downside is that if there's more than one course mapped to from the same org/course root
                 # the block ids will likely be out of sync and collide from an id perspective. HOWEVER,
                 # if there are few == org/course roots or their content is unrelated, this will work well.
-                block_id = self._verify_uniqueness(location.category + location.name[:3], block_map)
+                block_id = self._verify_uniqueness(location.block_type + location.name[:3], block_map)
             else:
                 # if 2 different category locations had same name, then they'll collide. Make the later
                 # mapped ones unique
                 block_id = self._verify_uniqueness(location.name, block_map)
         encoded_location_name = self.encode_key_for_mongo(location.name)
-        block_map.setdefault(encoded_location_name, {})[location.category] = block_id
+        block_map.setdefault(encoded_location_name, {})[location.block_type] = block_id
         self.location_map.update(course_son, {'$set': {'block_map': block_map}})
         return block_id
 
@@ -454,7 +454,7 @@ class LocMapperStore(object):
         the get_course query
         """
         setmany = {}
-        if location.category == 'course':
+        if location.block_type == 'course':
             setmany[self._course_key_cache_string(published_usage)] = location.course_key
         setmany[unicode(published_usage)] = location
         setmany[unicode(draft_usage)] = location
@@ -505,7 +505,7 @@ class LocMapperStore(object):
         Remove the location of course (draft and published) from cache
         """
         delete_keys = []
-        if location.category == 'course':
+        if location.block_type == 'course':
             delete_keys.append(self._course_key_cache_string(published_usage.course_key))
 
         delete_keys.append(unicode(published_usage))

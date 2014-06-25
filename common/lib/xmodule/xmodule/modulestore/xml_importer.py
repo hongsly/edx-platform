@@ -520,7 +520,7 @@ def import_course_draft(
                         # this is to make sure private only verticals show up
                         # in the list of children since they would have been
                         # filtered out from the non-draft store export
-                        if module.location.category == 'vertical':
+                        if module.location.block_type == 'vertical':
                             non_draft_location = module.location.replace(revision=None)
                             sequential_url = module.xml_attributes['parent_sequential_url']
                             index = int(module.xml_attributes['index_in_children_list'])
@@ -565,7 +565,7 @@ def check_module_metadata_editability(module):
     we can't support editing. However we always allow 'display_name'
     and 'xml_attributes'
     '''
-    allowed = allowed_metadata_by_category(module.location.category)
+    allowed = allowed_metadata_by_category(module.location.block_type)
     if '*' in allowed:
         # everything is allowed
         return 0
@@ -590,7 +590,7 @@ def validate_no_non_editable_metadata(module_store, course_id, category):
     err_cnt = 0
     for module_loc in module_store.modules[course_id]:
         module = module_store.modules[course_id][module_loc]
-        if module.location.category == category:
+        if module.location.block_type == category:
             err_cnt = err_cnt + check_module_metadata_editability(module)
 
     return err_cnt
@@ -603,7 +603,7 @@ def validate_category_hierarchy(
     parents = []
     # get all modules of parent_category
     for module in module_store.modules[course_id].itervalues():
-        if module.location.category == parent_category:
+        if module.location.block_type == parent_category:
             parents.append(module)
 
     for parent in parents:
@@ -659,7 +659,7 @@ def validate_course_policy(module_store, course_id):
     # is there a reliable way to get the module location just given the course_id?
     warn_cnt = 0
     for module in module_store.modules[course_id].itervalues():
-        if module.location.category == 'course':
+        if module.location.block_type == 'course':
             if not module._field_data.has(module, 'rerandomize'):
                 warn_cnt += 1
                 print(

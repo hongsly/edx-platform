@@ -421,7 +421,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
                 total_children = existing_children + additional_children
                 results_by_url[location_url].setdefault('definition', {})['children'] = total_children
             results_by_url[location_url] = result
-            if location.category == 'course':
+            if location.block_type == 'course':
                 root = location_url
 
         # now traverse the tree and compute down the inherited metadata
@@ -883,14 +883,14 @@ class MongoModuleStore(ModuleStoreWriteBase):
                 select=self.xblock_select,
                 services=services,
             )
-        xblock_class = system.load_block_type(location.category)
-        dbmodel = self._create_new_field_data(location.category, location, definition_data, metadata)
+        xblock_class = system.load_block_type(location.block_type)
+        dbmodel = self._create_new_field_data(location.block_type, location, definition_data, metadata)
         xmodule = system.construct_xblock_from_class(
             xblock_class,
             # We're loading a descriptor, so student_id is meaningless
             # We also don't have separate notions of definition and usage ids yet,
             # so we use the location for both.
-            ScopeIds(None, location.category, location, location),
+            ScopeIds(None, location.block_type, location, location),
             dbmodel,
         )
         if fields is not None:
@@ -924,7 +924,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
         # if we add one then we need to also add it to the policy information (i.e. metadata)
         # we should remove this once we can break this reference from the course to static tabs
         # TODO move this special casing to app tier (similar to attaching new element to parent)
-        if location.category == 'static_tab':
+        if location.block_type == 'static_tab':
             course = self._get_course_for_item(location)
             course.tabs.append(
                 StaticTab(
@@ -1054,7 +1054,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
         # VS[compat] cdodge: This is a hack because static_tabs also have references from the course module, so
         # if we add one then we need to also add it to the policy information (i.e. metadata)
         # we should remove this once we can break this reference from the course to static tabs
-        if location.category == 'static_tab':
+        if location.block_type == 'static_tab':
             item = self.get_item(location)
             course = self._get_course_for_item(item.scope_ids.usage_id)
             existing_tabs = course.tabs or []

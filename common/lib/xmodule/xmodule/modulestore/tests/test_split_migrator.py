@@ -150,7 +150,7 @@ class TestMigration(SplitWMongoCourseBoostrapper):
             metadata = {'display_name': str(uuid.uuid4()), 'graded': True}
             data = {}
             self._create_item(
-                location.category, location.name, data, metadata, parent_loc.category, parent_loc.name,
+                location.block_type, location.name, data, metadata, parent_loc.category, parent_loc.name,
                 draft=draft, split=False
             )
 

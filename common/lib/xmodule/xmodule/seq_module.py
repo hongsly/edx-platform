@@ -106,7 +106,7 @@ class SequenceModule(SequenceFields, XModule):
                   'element_id': self.location.html_id(),
                   'item_id': unicode(self.location),
                   'position': self.position,
-                  'tag': self.location.category,
+                  'tag': self.location.block_type,
                   'ajax_url': self.system.ajax_url,
                   }
 

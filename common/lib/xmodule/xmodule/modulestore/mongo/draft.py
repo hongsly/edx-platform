@@ -94,7 +94,7 @@ class DraftModuleStore(MongoModuleStore):
         :param metadata: can be empty, the initial metadata for the kvs
         :param system: if you already have an xmodule from the course, the xmodule.system value
         """
-        if location.category not in DIRECT_ONLY_CATEGORIES:
+        if location.block_type not in DIRECT_ONLY_CATEGORIES:
             location = as_draft(location)
         return super(DraftModuleStore, self).create_xmodule(location, definition_data, metadata, system, fields)
 
@@ -142,7 +142,7 @@ class DraftModuleStore(MongoModuleStore):
 
         :param source: the location of the source (its revision must be None)
         """
-        if source_location.category in DIRECT_ONLY_CATEGORIES:
+        if source_location.block_type in DIRECT_ONLY_CATEGORIES:
             raise InvalidVersionError(source_location)
         original = self.collection.find_one({'_id': source_location.to_deprecated_son()})
         if not original:
@@ -164,7 +164,7 @@ class DraftModuleStore(MongoModuleStore):
         In addition to the superclass's behavior, this method converts the unit to draft if it's not
         already draft.
         """
-        if xblock.location.category in DIRECT_ONLY_CATEGORIES:
+        if xblock.location.block_type in DIRECT_ONLY_CATEGORIES:
             return super(DraftModuleStore, self).update_item(xblock, user_id, allow_not_found)
 
         draft_loc = as_draft(xblock.location)
@@ -186,7 +186,7 @@ class DraftModuleStore(MongoModuleStore):
 
         location: A UsageKey
         """
-        if location.category in DIRECT_ONLY_CATEGORIES:
+        if location.block_type in DIRECT_ONLY_CATEGORIES:
             return super(DraftModuleStore, self).delete_item(as_published(location))
 
         super(DraftModuleStore, self).delete_item(as_draft(location))
@@ -203,7 +203,7 @@ class DraftModuleStore(MongoModuleStore):
         """
 
         # Direct only categories can never have changes because they can't have drafts
-        if location.category in DIRECT_ONLY_CATEGORIES:
+        if location.block_type in DIRECT_ONLY_CATEGORIES:
             return False
 
         draft = self.get_item(location)
@@ -223,7 +223,7 @@ class DraftModuleStore(MongoModuleStore):
         """
         Save a current draft to the underlying modulestore
         """
-        if location.category in DIRECT_ONLY_CATEGORIES:
+        if location.block_type in DIRECT_ONLY_CATEGORIES:
             # ignore noop attempt to publish something that can't be draft.
             # ignoring v raising exception b/c bok choy tests always pass make_public which calls publish
             return

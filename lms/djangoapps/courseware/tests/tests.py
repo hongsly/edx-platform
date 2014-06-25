@@ -69,17 +69,17 @@ class PageLoaderTestCase(LoginEnrollmentTestCase):
         # Try to load each item in the course
         for descriptor in items:
 
-            if descriptor.location.category == 'about':
+            if descriptor.location.block_type == 'about':
                 self._assert_loads('about_course',
                                    {'course_id': unicode(course_key)},
                                    descriptor)
 
-            elif descriptor.location.category == 'static_tab':
+            elif descriptor.location.block_type == 'static_tab':
                 kwargs = {'course_id': unicode(course_key),
                           'tab_slug': descriptor.location.name}
                 self._assert_loads('static_tab', kwargs, descriptor)
 
-            elif descriptor.location.category == 'course_info':
+            elif descriptor.location.block_type == 'course_info':
                 self._assert_loads('info', {'course_id': unicode(course_key)},
                                    descriptor)
 

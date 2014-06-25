@@ -32,7 +32,7 @@ class StaticContent(object):
 
     @property
     def is_thumbnail(self):
-        return self.location.category == 'thumbnail'
+        return self.location.block_type == 'thumbnail'
 
     @staticmethod
     def generate_thumbnail_name(original_name):

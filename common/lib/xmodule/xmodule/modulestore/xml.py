@@ -688,7 +688,7 @@ class XMLModuleStore(ModuleStoreReadBase):
                                 data_content['category'] = category
                     else:
                         slug = os.path.splitext(os.path.basename(filepath))[0]
-                        loc = course_descriptor.scope_ids.usage_id.replace(category=category, name=slug)
+                        loc = course_descriptor.scope_ids.usage_id.replace(block_type=category, block_id=slug)
                         # html file with html data content
                         html = f.read().decode('utf-8')
                         try:

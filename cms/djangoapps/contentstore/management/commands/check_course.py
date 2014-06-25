@@ -43,7 +43,7 @@ class Command(BaseCommand):
         # check for dangling discussion items, this can cause errors in the forums
         def _get_discussion_items(module):
             discussion_items = []
-            if module.location.category == 'discussion':
+            if module.location.block_type == 'discussion':
                 discussion_items = discussion_items + [module.location]
 
             for child in module.get_children():

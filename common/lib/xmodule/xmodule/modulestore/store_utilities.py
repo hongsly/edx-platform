@@ -122,7 +122,7 @@ def clone_course(modulestore, contentstore, source_course_id, dest_course_id):
 
     basically_empty = True
     for module in dest_modules:
-        if module.location.category == 'course' or (module.location.category == 'about'
+        if module.location.block_type == 'course' or (module.location.block_type == 'about'
                                                     and module.location.name == 'overview'):
             continue
 

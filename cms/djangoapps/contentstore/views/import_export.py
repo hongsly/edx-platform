@@ -338,7 +338,7 @@ def export_handler(request, course_key_string):
 
                 if len(parent_locs) > 0:
                     parent = modulestore().get_item(parent_locs[0])
-                    if parent.location.category == 'vertical':
+                    if parent.location.block_type == 'vertical':
                         unit = parent
             except:  # pylint: disable=bare-except
                 # if we have a nested exception, then we'll show the more generic error message

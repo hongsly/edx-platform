@@ -123,7 +123,7 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
         Create a course w/ one item in the persistence store using the given course & item location.
         """
         course = self.store.create_course(course_key.org, course_key.course, course_key.run, store_name=default)
-        category = self.import_chapter_location.category
+        category = self.import_chapter_location.block_type
         block_id = self.import_chapter_location.name
         chapter = self.store.create_item(
             # don't use course_location as it may not be the repr

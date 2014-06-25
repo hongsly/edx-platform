@@ -100,7 +100,7 @@ def subsection_handler(request, usage_key_string):
 
         # make sure that location references a 'sequential', otherwise return
         # BadRequest
-        if item.location.category != 'sequential':
+        if item.location.block_type != 'sequential':
             return HttpResponseBadRequest()
 
         parent = get_parent_xblock(item)
