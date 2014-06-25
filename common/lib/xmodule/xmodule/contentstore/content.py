@@ -53,10 +53,9 @@ class StaticContent(object):
             asset
         """
         path = path.replace('/', '_')
-        return course_key.make_asset_key(
+        return course_key.replace(branch=revision).make_asset_key(
             'asset' if not is_thumbnail else 'thumbnail',
             AssetLocator.clean_keeping_underscores(path),
-            revision
         )
 
     def get_id(self):
