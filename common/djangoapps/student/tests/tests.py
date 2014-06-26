@@ -460,7 +460,7 @@ class PaidRegistrationTest(ModuleStoreTestCase):
 
 
 @override_settings(MODULESTORE=TEST_DATA_MIXED_MODULESTORE)
-class AnonymousLookupTable(TestCase):
+class AnonymousLookupTable(ModuleStoreTestCase):
     """
     Tests for anonymous_id_functions
     """
