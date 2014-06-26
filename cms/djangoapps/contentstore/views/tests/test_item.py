@@ -17,7 +17,7 @@ from contentstore.utils import reverse_usage_url, reverse_course_url
 from contentstore.views.component import (
     component_handler, get_component_templates,
     SPLIT_TEST_COMPONENT_TYPE
-    )
+)
 
 from contentstore.tests.utils import CourseTestCase
 from contentstore.utils import compute_publish_state, PublishState

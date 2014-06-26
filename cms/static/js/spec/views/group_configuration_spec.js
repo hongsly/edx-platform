@@ -61,7 +61,7 @@ define([
                 this.view.render();
 
                 expect(this.view.$el).toContainText('Configuration');
-                expect(this.view.$el).toContainText('Id: 0');
+                expect(this.view.$el).toContainText('ID: 0');
             });
 
             it('should show groups appropriately', function() {

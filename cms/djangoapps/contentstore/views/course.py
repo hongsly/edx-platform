@@ -12,7 +12,7 @@ from django.conf import settings
 from django.views.decorators.http import require_http_methods
 from django.core.exceptions import PermissionDenied
 from django.core.urlresolvers import reverse
-from django.http import HttpResponseBadRequest, HttpResponseNotFound, Http404
+from django.http import HttpResponseBadRequest, HttpResponseNotFound
 from util.json_request import JsonResponse
 from edxmako.shortcuts import render_to_response
 
@@ -267,7 +267,6 @@ def course_index(request, course_key):
     course_module = _get_course_module(course_key, request.user, depth=3)
     lms_link = get_lms_link_for_item(course_module.location)
     sections = course_module.get_children()
-
 
     return render_to_response('overview.html', {
         'context_course': course_module,
@@ -605,7 +604,7 @@ def _config_course_advanced_components(request, course_module):
                         # Indicate that tabs should not be filtered out of
                         # the metadata
                         filter_tabs = False  # Set this flag to avoid the tab removal code below.
-                    found_ac_type = True  #break
+                    found_ac_type = True  # break
 
             # If we did not find a module type in the advanced settings,
             # we may need to remove the tab from the course.
@@ -613,7 +612,7 @@ def _config_course_advanced_components(request, course_module):
                 changed, new_tabs = remove_extra_panel_tab(tab_type, course_module)
                 if changed:
                     course_module.tabs = new_tabs
-                    request.json.update({'tabs':new_tabs})
+                    request.json.update({'tabs': new_tabs})
                     # Indicate that tabs should *not* be filtered out of
                     # the metadata
                     filter_tabs = False
@@ -869,16 +868,13 @@ def group_configurations_list_handler(request, course_key_string):
     course_key = CourseKey.from_string(course_key_string)
     course = _get_course_module(course_key, request.user)
     group_configuration_url = reverse_course_url('group_configurations_list_handler', course_key)
-    res = {
+    splite_test_enabled = SPLIT_TEST_COMPONENT_TYPE in course.advanced_modules
+
+    return render_to_response('group_configurations.html', {
         'context_course': course,
         'group_configuration_url': group_configuration_url,
-    }
-    if SPLIT_TEST_COMPONENT_TYPE not in course.advanced_modules:
-       res['configurations'] = None
-    else:
-        user_partitions = [user_partition.to_json() for user_partition in course.user_partitions]
-        res['configurations'] = user_partitions
-    return render_to_response('group_configurations.html', res)
+        'configurations': [u.to_json() for u in course.user_partitions] if splite_test_enabled else None,
+    })
 
 
 def _get_course_creator_status(user):

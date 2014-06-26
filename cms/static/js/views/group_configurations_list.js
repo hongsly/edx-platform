@@ -9,7 +9,6 @@ function(BaseView, $, GroupConfigurationDetailsView) {
         initialize: function() {
             this.emptyTemplate = this.loadTemplate('no-group-configurations');
             this.listenTo(this.collection, 'all', this.render);
-            this.listenTo(this.collection, 'destroy', this.handleDestroy);
         },
 
         render: function() {
@@ -30,10 +29,6 @@ function(BaseView, $, GroupConfigurationDetailsView) {
                 this.$el.html([frag]);
             }
             return this;
-        },
-
-        handleDestroy: function(model, collection) {
-            collection.remove(model);
         }
     });
 

@@ -41,7 +41,7 @@ function(BaseView, _, gettext) {
         getGroupsCountTitle: function () {
             var count = this.model.get('groups').length,
                 message = ngettext(
-                    // Translators: 'count' is number of groups that the content experiment contains.
+                    // Translators: 'count' is number of groups that the group configuration contains.
                     'Contains %(count)s group', 'Contains %(count)s groups',
                     count
                 );
