@@ -780,13 +780,13 @@ class XMLModuleStore(ModuleStoreReadBase):
 
         items = []
 
-        category = kwargs.pop('category', None)
-        name = kwargs.pop('name', None)
+        block_type = kwargs.pop('block_type', kwargs.pop('category', None))
+        block_id = kwargs.pop('block_id', kwargs.pop('name', None))
 
         def _block_matches_all(mod_loc, module):
-            if category and mod_loc.category != category:
+            if block_type and mod_loc.block_type != block_type:
                 return False
-            if name and mod_loc.name != name:
+            if block_id and mod_loc.block_id != block_id:
                 return False
             return all(
                 self._block_matches(module, fields or {})
