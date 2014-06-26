@@ -421,7 +421,7 @@ class CourseDescriptor(CourseFields, SequenceDescriptor):
         _ = self.runtime.service(self, "i18n").ugettext
 
         if self.wiki_slug is None:
-            self.wiki_slug = "{}.{}".format(self.id.course, self.id.run)
+            self.wiki_slug = u"{}.{}".format(self.id.course, self.id.run)
 
         if self.due_date_display_format is None and self.show_timezone is False:
             # For existing courses with show_timezone set to False (and no due_date_display_format specified),
