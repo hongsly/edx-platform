@@ -1,10 +1,17 @@
-define(['js/views/baseview', 'jquery', 'js/views/group_configuration_details'],
-function(BaseView, $, GroupConfigurationDetailsView) {
+define([
+    'js/views/baseview', 'jquery', 'js/views/group_configuration_details',
+    'js/views/group_configuration_edit'
+],
+function(
+    BaseView, $, GroupConfigurationDetailsView, GroupConfigurationEditView
+) {
     'use strict';
     var GroupConfigurationsList = BaseView.extend({
         tagName: 'div',
         className: 'group-configurations-list',
-        events: { },
+        events: {
+            'click .new-button': 'addOne'
+        },
 
         initialize: function() {
             this.emptyTemplate = this.loadTemplate('no-group-configurations');
@@ -19,9 +26,17 @@ function(BaseView, $, GroupConfigurationDetailsView) {
                 var frag = document.createDocumentFragment();
 
                 configurations.each(function(configuration) {
-                    var view = new GroupConfigurationDetailsView({
-                        model: configuration
-                    });
+                    var view
+
+                    if (configuration.get('editing')) {
+                        view = new GroupConfigurationEditView({
+                            model: configuration
+                        });
+                    } else {
+                        view = new GroupConfigurationDetailsView({
+                            model: configuration
+                        });
+                    }
 
                     frag.appendChild(view.render().el);
                 });
@@ -29,6 +44,11 @@ function(BaseView, $, GroupConfigurationDetailsView) {
                 this.$el.html([frag]);
             }
             return this;
+        },
+
+        addOne: function(event) {
+            if(event && event.preventDefault) { event.preventDefault(); }
+            this.collection.add([{editing: true}]);
         }
     });
 
