@@ -60,7 +60,7 @@ def path_to_location(modulestore, usage_key):
             parents = modulestore.get_parent_locations(next_usage)
 
             # print 'Processing loc={0}, path={1}'.format(next_usage, path)
-            if next_usage.definition_key.block_type == "course":
+            if next_usage.block_type == "course":
                 # Found it!
                 path = (next_usage, path)
                 return flatten(path)

@@ -32,7 +32,7 @@ class OrderTest(ModuleStoreTestCase):
         course = CourseFactory.create(org='org', number='test', display_name='Test Course')
         self.course_key = course.id
         for i in xrange(1, 5):
-            CourseFactory.create(org='org', number='test', display_name='Test Course {0}'.format(i))
+            CourseFactory.create(org='org', number='test{}'.format(i), display_name='Test Course {}'.format(i))
         self.cost = 40
 
     def test_get_cart_for_user(self):
@@ -56,7 +56,7 @@ class OrderTest(ModuleStoreTestCase):
     def test_cart_clear(self):
         cart = Order.get_cart_for_user(user=self.user)
         CertificateItem.add_to_order(cart, self.course_key, self.cost, 'honor')
-        CertificateItem.add_to_order(cart, CourseKey.from_string('org/test/Test_Course_1'), self.cost, 'honor')
+        CertificateItem.add_to_order(cart, CourseKey.from_string('org/test1/Test_Course_1'), self.cost, 'honor')
         self.assertEquals(cart.orderitem_set.count(), 2)
         self.assertTrue(cart.has_items())
         cart.clear()
@@ -78,10 +78,10 @@ class OrderTest(ModuleStoreTestCase):
     def test_total_cost(self):
         cart = Order.get_cart_for_user(user=self.user)
         # add items to the order
-        course_costs = [('org/test/Test_Course_1', 30),
-                        ('org/test/Test_Course_2', 40),
-                        ('org/test/Test_Course_3', 10),
-                        ('org/test/Test_Course_4', 20)]
+        course_costs = [('org/test1/Test_Course_1', 30),
+                        ('org/test2/Test_Course_2', 40),
+                        ('org/test3/Test_Course_3', 10),
+                        ('org/test4/Test_Course_4', 20)]
         for course, cost in course_costs:
             CertificateItem.add_to_order(cart, CourseKey.from_string(course), cost, 'honor')
         self.assertEquals(cart.orderitem_set.count(), len(course_costs))

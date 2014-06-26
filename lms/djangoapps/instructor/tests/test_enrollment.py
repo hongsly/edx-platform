@@ -11,6 +11,7 @@ from django.test import TestCase
 from django.test.utils import override_settings
 from student.tests.factories import UserFactory
 from xmodule.modulestore.tests.factories import CourseFactory
+from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from courseware.tests.modulestore_config import TEST_DATA_MIXED_MODULESTORE
 
 from student.models import CourseEnrollment, CourseEnrollmentAllowed
@@ -431,7 +432,7 @@ class TestSendBetaRoleEmail(TestCase):
 
 
 @override_settings(MODULESTORE=TEST_DATA_MIXED_MODULESTORE)
-class TestGetEmailParams(TestCase):
+class TestGetEmailParams(ModuleStoreTestCase):
     """
     Test what URLs the function get_email_params returns under different
     production-like conditions.
