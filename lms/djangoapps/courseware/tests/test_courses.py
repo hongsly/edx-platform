@@ -48,8 +48,8 @@ class CoursesTest(ModuleStoreTestCase):
 class ModuleStoreBranchSettingTest(ModuleStoreTestCase):
     """Test methods related to the modulestore branch setting."""
     def cleanup_branch_setting(self):
-        if hasattr(store_django._thread_cache, 'branch_setting'):
-            delattr(store_django._thread_cache, 'branch_setting')
+        if hasattr(store_django._THREAD_CACHE, 'branch_setting'):
+            delattr(store_django._THREAD_CACHE, 'branch_setting')
 
     def setUp(self):
         self.cleanup_branch_setting()
