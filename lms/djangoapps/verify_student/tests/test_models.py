@@ -2,6 +2,7 @@
 from datetime import timedelta, datetime
 import json
 from xmodule.modulestore.tests.factories import CourseFactory
+from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from opaque_keys.edx.keys import CourseKey
 from nose.tools import assert_is_none, assert_equals, assert_raises, assert_true, assert_false
 from mock import patch
@@ -420,7 +421,7 @@ class TestPhotoVerification(TestCase):
 @patch('verify_student.models.S3Connection', new=MockS3Connection)
 @patch('verify_student.models.Key', new=MockKey)
 @patch('verify_student.models.requests.post', new=mock_software_secure_post)
-class TestMidcourseReverification(TestCase):
+class TestMidcourseReverification(ModuleStoreTestCase):
     """ Tests for methods that are specific to midcourse SoftwareSecurePhotoVerification objects """
     def setUp(self):
         self.course = CourseFactory.create(org='MITx', number='999', display_name='Robot Super Course')
