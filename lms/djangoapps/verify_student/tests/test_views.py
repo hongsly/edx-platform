@@ -24,6 +24,7 @@ from django.conf import settings
 from django.core.urlresolvers import reverse
 from django.core.exceptions import ObjectDoesNotExist
 
+from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
 from opaque_keys.edx.keys import CourseKey
 from courseware.tests.tests import TEST_DATA_MONGO_MODULESTORE
@@ -60,7 +61,7 @@ class StartView(TestCase):
 
 
 @override_settings(MODULESTORE=TEST_DATA_MONGO_MODULESTORE)
-class TestVerifyView(TestCase):
+class TestVerifyView(ModuleStoreTestCase):
     def setUp(self):
         self.user = UserFactory.create(username="rusty", password="test")
         self.client.login(username="rusty", password="test")
@@ -82,7 +83,7 @@ class TestVerifyView(TestCase):
 
 
 @override_settings(MODULESTORE=TEST_DATA_MONGO_MODULESTORE)
-class TestVerifiedView(TestCase):
+class TestVerifiedView(ModuleStoreTestCase):
     """
     Tests for VerifiedView.
     """
@@ -110,7 +111,7 @@ class TestVerifiedView(TestCase):
 
 
 @override_settings(MODULESTORE=TEST_DATA_MONGO_MODULESTORE)
-class TestReverifyView(TestCase):
+class TestReverifyView(ModuleStoreTestCase):
     """
     Tests for the reverification views
 
@@ -156,7 +157,7 @@ class TestReverifyView(TestCase):
 
 
 @override_settings(MODULESTORE=TEST_DATA_MONGO_MODULESTORE)
-class TestPhotoVerificationResultsCallback(TestCase):
+class TestPhotoVerificationResultsCallback(ModuleStoreTestCase):
     """
     Tests for the results_callback view.
     """
@@ -368,7 +369,7 @@ class TestPhotoVerificationResultsCallback(TestCase):
 
 
 @override_settings(MODULESTORE=TEST_DATA_MONGO_MODULESTORE)
-class TestMidCourseReverifyView(TestCase):
+class TestMidCourseReverifyView(ModuleStoreTestCase):
     """ Tests for the midcourse reverification views """
     def setUp(self):
         self.user = UserFactory.create(username="rusty", password="test")
@@ -455,7 +456,7 @@ class TestMidCourseReverifyView(TestCase):
 
 
 @override_settings(MODULESTORE=TEST_DATA_MONGO_MODULESTORE)
-class TestReverificationBanner(TestCase):
+class TestReverificationBanner(ModuleStoreTestCase):
     """ Tests for the midcourse reverification  failed toggle banner off """
 
     @patch.dict(settings.FEATURES, {'AUTOMATIC_VERIFY_STUDENT_IDENTITY_FOR_TESTING': True})

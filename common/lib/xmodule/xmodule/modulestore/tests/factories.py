@@ -49,8 +49,7 @@ class CourseFactory(XModuleFactory):
         # because the factory provides a default 'number' arg, prefer the non-defaulted 'course' arg if any
         number = kwargs.pop('course', kwargs.pop('number', None))
         store = kwargs.pop('modulestore')
-        name = kwargs.get('name', kwargs.get('run', BlockUsageLocator.clean(kwargs.get('display_name'))))
-        run = kwargs.get('run', name)
+        run = kwargs.get('run', BlockUsageLocator.clean(kwargs.get('display_name')))
 
         # Write the data to the mongo datastore
         new_course = store.create_course(org, number, run, fields=kwargs.get('metadata', None))

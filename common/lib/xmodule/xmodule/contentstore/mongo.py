@@ -1,7 +1,7 @@
 import pymongo
 import gridfs
 from gridfs.errors import NoFile
-from opaque_keys.edx.keys import AssetLocator
+from opaque_keys.edx.keys import AssetKey
 
 from xmodule.modulestore.mongo.base import location_to_query, MongoModuleStore
 from xmodule.contentstore.content import XASSET_LOCATION_TAG
@@ -65,7 +65,7 @@ class MongoContentStore(ContentStore):
         return content
 
     def delete(self, location_or_id):
-        if isinstance(location_or_id, AssetLocator):
+        if isinstance(location_or_id, AssetKey):
             location_or_id = self.asset_db_key(location_or_id)
         # Deletes of non-existent files are considered successful
         self.fs.delete(location_or_id)
