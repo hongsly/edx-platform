@@ -8,7 +8,8 @@ from collections import namedtuple
 from xmodule.tests import DATA_DIR
 from opaque_keys.edx.locations import Location
 from xmodule.modulestore import (
-    MONGO_MODULESTORE_TYPE, SPLIT_MONGO_MODULESTORE_TYPE, XML_MODULESTORE_TYPE, DRAFT, PUBLISHED
+    MONGO_MODULESTORE_TYPE, SPLIT_MONGO_MODULESTORE_TYPE, XML_MODULESTORE_TYPE,
+    REVISION_OPTION_DRAFT_PREFERRED, REVISION_OPTION_PUBLISHED_ONLY, BRANCH_DRAFT_PREFERRED
 )
 from xmodule.modulestore.exceptions import ItemNotFoundError
 
@@ -419,16 +420,16 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
 
         self.verify_get_parent_locations_results([
             (child_to_move, new_parent, None),
-            (child_to_move, new_parent, DRAFT),
-            (child_to_move, old_parent, PUBLISHED),
+            (child_to_move, new_parent, REVISION_OPTION_DRAFT_PREFERRED),
+            (child_to_move, old_parent, REVISION_OPTION_PUBLISHED_ONLY),
         ])
 
         # publish the course again
         self.store.publish(self.course.location, self.user_id)
         self.verify_get_parent_locations_results([
             (child_to_move, new_parent, None),
-            (child_to_move, new_parent, DRAFT),
-            (child_to_move, new_parent, PUBLISHED),
+            (child_to_move, new_parent, REVISION_OPTION_DRAFT_PREFERRED),
+            (child_to_move, new_parent, REVISION_OPTION_PUBLISHED_ONLY),
         ])
 
     @ddt.data('draft')
@@ -450,16 +451,16 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
         self.verify_get_parent_locations_results([
             (child_to_delete, old_parent, None),
             # Note: The following could be an unexpected result, but we want to avoid an extra database call
-            (child_to_delete, old_parent, DRAFT),
-            (child_to_delete, old_parent, PUBLISHED),
+            (child_to_delete, old_parent, REVISION_OPTION_DRAFT_PREFERRED),
+            (child_to_delete, old_parent, REVISION_OPTION_PUBLISHED_ONLY),
         ])
 
         # publish the course again
         self.store.publish(self.course.location, self.user_id)
         self.verify_get_parent_locations_results([
             (child_to_delete, None, None),
-            (child_to_delete, None, DRAFT),
-            (child_to_delete, None, PUBLISHED),
+            (child_to_delete, None, REVISION_OPTION_DRAFT_PREFERRED),
+            (child_to_delete, None, REVISION_OPTION_PUBLISHED_ONLY),
         ])
 
     @ddt.data('draft', 'split')
@@ -528,6 +529,6 @@ def create_modulestore_instance(engine, doc_store_config, options, i18n_service=
 
     return class_(
         doc_store_config=doc_store_config,
-        branch_setting_func=lambda: DRAFT,
+        branch_setting_func=lambda: BRANCH_DRAFT_PREFERRED,
         **options
     )

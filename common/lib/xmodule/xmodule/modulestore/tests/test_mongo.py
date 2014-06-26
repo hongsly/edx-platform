@@ -20,7 +20,7 @@ from xblock.plugin import Plugin
 
 from xmodule.tests import DATA_DIR
 from opaque_keys.edx.locations import Location
-from xmodule.modulestore import MONGO_MODULESTORE_TYPE, DRAFT
+from xmodule.modulestore import MONGO_MODULESTORE_TYPE, BRANCH_DRAFT_PREFERRED
 from xmodule.modulestore.mongo import MongoModuleStore, MongoKeyValueStore
 from xmodule.modulestore.draft import DraftModuleStore
 from opaque_keys.edx.locations import SlashSeparatedCourseKey, AssetLocation
@@ -101,7 +101,9 @@ class TestMongoModuleStore(unittest.TestCase):
         # Also test draft store imports
         #
         draft_store = DraftModuleStore(
-            doc_store_config, FS_ROOT, RENDER_TEMPLATE, default_class=DEFAULT_CLASS, branch_setting_func=lambda: DRAFT
+            doc_store_config, FS_ROOT, RENDER_TEMPLATE,
+            default_class=DEFAULT_CLASS,
+            branch_setting_func=lambda: BRANCH_DRAFT_PREFERRED
         )
         import_from_xml(
             draft_store,

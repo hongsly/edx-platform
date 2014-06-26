@@ -6,7 +6,7 @@ import unittest
 from django.contrib.auth.models import User
 from django.core.management import CommandError, call_command
 from contentstore.management.commands.migrate_to_split import Command
-from xmodule.modulestore import SPLIT_MONGO_MODULESTORE_TYPE, PUBLISHED
+from xmodule.modulestore import SPLIT_MONGO_MODULESTORE_TYPE, REVISION_OPTION_PUBLISHED_ONLY
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
 from xmodule.modulestore.django import modulestore, clear_existing_modulestores
@@ -84,6 +84,6 @@ class TestMigrateToSplit(ModuleStoreTestCase):
             str(self.user.id),
             "org.dept+name.run",
         )
-        locator = CourseLocator(org="org.dept", offering="name.run", branch=PUBLISHED)
+        locator = CourseLocator(org="org.dept", offering="name.run", branch=REVISION_OPTION_PUBLISHED_ONLY)
         course_from_split = modulestore('split').get_course(locator)
         self.assertIsNotNone(course_from_split)

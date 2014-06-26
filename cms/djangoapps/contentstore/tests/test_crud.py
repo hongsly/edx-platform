@@ -1,7 +1,7 @@
 import unittest
 
 from xmodule import templates
-from xmodule.modulestore import SPLIT_MONGO_MODULESTORE_TYPE, DRAFT
+from xmodule.modulestore import SPLIT_MONGO_MODULESTORE_TYPE, BRANCH_NAME_DRAFT
 from xmodule.modulestore.tests import persistent_factories
 from xmodule.course_module import CourseDescriptor
 from xmodule.modulestore.django import modulestore, clear_existing_modulestores, _MIXED_MODULESTORE, \
@@ -156,7 +156,7 @@ class TemplateTests(unittest.TestCase):
         persistent_factories.ItemFactory.create(display_name='chapter 1',
             parent_location=test_course.location)
 
-        id_locator = test_course.id.for_branch(DRAFT)
+        id_locator = test_course.id.for_branch(BRANCH_NAME_DRAFT)
         guid_locator = test_course.location.course_agnostic()
         # verify it can be retrieved by id
         self.assertIsInstance(self.split_store.get_course(id_locator), CourseDescriptor)

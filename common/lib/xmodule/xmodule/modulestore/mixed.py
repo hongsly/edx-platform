@@ -406,12 +406,13 @@ class MixedModuleStore(ModuleStoreWriteBase):
 
     def compute_publish_state(self, xblock):
         """
-        Returns whether this xblock is 'draft', 'public', or 'private'.
+        Returns whether this xblock is draft, public, or private.
 
-        'draft' content is in the process of being edited, but still has a previous
-            version deployed to LMS
-        'public' content is locked and deployed to LMS
-        'private' content is editable and not deployed to LMS
+        Returns:
+            PublishState.draft - content is in the process of being edited, but still has a previous
+                version deployed to LMS
+            PublishState.public - content is locked and deployed to LMS
+            PublishState.private - content is editable and not deployed to LMS
         """
         course_id = xblock.scope_ids.usage_id.course_key
         store = self._get_modulestore_for_courseid(course_id)

@@ -117,12 +117,13 @@ def course_image_url(course):
 
 def compute_publish_state(xblock):
     """
-    Returns whether this xblock is 'draft', 'public', or 'private'.
+    Returns whether this xblock is draft, public, or private.
 
-    'draft' content is in the process of being edited, but still has a previous
-        version visible in the LMS
-    'public' content is locked and visible in the LMS
-    'private' content is editable and not visible in the LMS
+    Returns:
+        PublishState.draft - content is in the process of being edited, but still has a previous
+            version deployed to LMS
+        PublishState.public - content is locked and deployed to LMS
+        PublishState.private - content is editable and not deployed to LMS
     """
 
     return modulestore().compute_publish_state(xblock)

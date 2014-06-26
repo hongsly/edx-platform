@@ -32,23 +32,34 @@ MONGO_MODULESTORE_TYPE = 'mongo'
 XML_MODULESTORE_TYPE = 'xml'
 
 
-# Revision constants
+# Key Revision constants to use for Location and Usage Keys
+KEY_REVISION_DRAFT = 'draft'
+KEY_REVISION_PUBLISHED = None
 
-# this is equivalent to 'draft-preferred' since both DRAFT and PUBLISHED
-# versions are returned, with precedence to DRAFT versions
-DRAFT = 'draft'
 
-# this is equivalent to PUBLISHED_ONLY since only PUBLISHED versions are returned
-PUBLISHED = 'published'
+# Revision constants to use for Module Store operations
 
-# only DRAFT versions are returned and no PUBLISHED versions
-DRAFT_ONLY = 'draft-only'
+# both DRAFT and PUBLISHED versions are queried, with preference to DRAFT versions
+REVISION_OPTION_DRAFT_PREFERRED = 'rev-opt-draft-preferred'
 
-# only PUBLISHED versions are returned and no DRAFT versions
-PUBLISHED_ONLY = 'published-only'
+# only DRAFT versions are queried and no PUBLISHED versions
+REVISION_OPTION_DRAFT_ONLY = 'rev-opt-draft-only'
 
-# all revisions are treated
-ALL_REVISIONS = 'all'
+# # only PUBLISHED versions are queried and no DRAFT versions
+REVISION_OPTION_PUBLISHED_ONLY = 'rev-opt-published-only'
+
+# all revisions are queried
+REVISION_OPTION_ALL = 'rev-opt-all'
+
+
+# Branch constants to use for stores, such as Mongo, that have only 2 branches: DRAFT and PUBLISHED
+BRANCH_DRAFT_PREFERRED = 'draft'
+BRANCH_PUBLISHED_ONLY = 'published'
+
+
+# Branch constants to use for stores, such as Split, that have named branches
+BRANCH_NAME_DRAFT = 'draft'
+BRANCH_NAME_PUBLISHED = 'published'
 
 
 class PublishState(object):

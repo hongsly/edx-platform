@@ -33,7 +33,11 @@ from xblock.runtime import KvsFieldData
 from xblock.exceptions import InvalidScopeError
 from xblock.fields import Scope, ScopeIds, Reference, ReferenceList, ReferenceValueDict
 
-from xmodule.modulestore import ModuleStoreWriteBase, MONGO_MODULESTORE_TYPE, PUBLISHED, DRAFT
+from xmodule.modulestore import (
+    ModuleStoreWriteBase, MONGO_MODULESTORE_TYPE, 
+    REVISION_OPTION_PUBLISHED_ONLY, REVISION_OPTION_DRAFT_PREFERRED,
+    KEY_REVISION_DRAFT, KEY_REVISION_PUBLISHED
+)
 from opaque_keys.edx.locations import Location
 from xmodule.modulestore.exceptions import ItemNotFoundError, InvalidLocationError, ReferentialIntegrityError
 from xmodule.modulestore.inheritance import own_metadata, InheritanceMixin, inherit_metadata, InheritanceKeyValueStore
@@ -42,6 +46,16 @@ from opaque_keys.edx.locations import SlashSeparatedCourseKey
 from xmodule.exceptions import HeartbeatFailure
 
 log = logging.getLogger(__name__)
+
+
+# Things w/ these categories should never be marked as version=DRAFT
+DIRECT_ONLY_CATEGORIES = ['course', 'chapter', 'sequential', 'about', 'static_tab', 'course_info']
+
+# sort order that returns DRAFT items first
+SORT_REVISION_FAVOR_DRAFT = ('_id.revision', pymongo.DESCENDING)
+
+# sort order that returns PUBLISHED items first
+SORT_REVISION_FAVOR_PUBLISHED = ('_id.revision', pymongo.ASCENDING)
 
 
 class InvalidWriteError(Exception):
@@ -200,7 +214,7 @@ class CachingDescriptorSystem(MakoDescriptorSystem):
                 if self.cached_metadata is not None:
                     # parent container pointers don't differentiate between draft and non-draft
                     # so when we do the lookup, we should do so with a non-draft location
-                    non_draft_loc = location.replace(revision=None)
+                    non_draft_loc = as_published(location)
 
                     # Convert the serialized fields values in self.cached_metadata
                     # to python values
@@ -282,16 +296,6 @@ def location_to_query(location, wildcard=True, tag='i4x'):
     return query
 
 
-# Things w/ these categories should never be marked as version=DRAFT
-DIRECT_ONLY_CATEGORIES = ['course', 'chapter', 'sequential', 'about', 'static_tab', 'course_info']
-
-# sort order that returns DRAFT items first
-SORT_REVISION_FAVOR_DRAFT = ('_id.revision', pymongo.DESCENDING)
-
-# sort order that returns PUBLISHED items first
-SORT_REVISION_FAVOR_PUBLISHED = ('_id.revision', pymongo.ASCENDING)
-
-
 def as_draft(location):
     """
     Returns the Location that is the draft for `location`
@@ -299,14 +303,14 @@ def as_draft(location):
     """
     if location.category in DIRECT_ONLY_CATEGORIES:
         return location
-    return location.replace(revision=DRAFT)
+    return location.replace(revision=KEY_REVISION_DRAFT)
 
 
 def as_published(location):
     """
     Returns the Location that is the published version for `location`
     """
-    return location.replace(revision=None)
+    return location.replace(revision=KEY_REVISION_PUBLISHED)
 
 
 class MongoModuleStore(ModuleStoreWriteBase):
@@ -419,8 +423,8 @@ class MongoModuleStore(ModuleStoreWriteBase):
 
         # now go through the results and order them by the location url
         for result in resultset:
-            # manually pick it apart b/c the db has tag and we want revision = None regardless
-            location = Location._from_deprecated_son(result['_id'], course_id.run).replace(revision=None)
+            # manually pick it apart b/c the db has tag and we want as_published revision regardless
+            location = as_published(Location._from_deprecated_son(result['_id'], course_id.run))
 
             location_url = location.to_deprecated_string()
             if location_url in results_by_url:
@@ -476,7 +480,10 @@ class MongoModuleStore(ModuleStoreWriteBase):
             if self.metadata_inheritance_cache_subsystem is not None:
                 tree = self.metadata_inheritance_cache_subsystem.get(unicode(course_id), {})
             else:
-                logging.warning('Running MongoModuleStore without a metadata_inheritance_cache_subsystem. This is OK in localdev and testing environment. Not OK in production.')
+                logging.warning(
+                    'Running MongoModuleStore without a metadata_inheritance_cache_subsystem. This is \
+                    OK in localdev and testing environment. Not OK in production.'
+                )
 
         if not tree:
             # if not in subsystem, or we are on force refresh, then we have to compute
@@ -737,7 +744,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
             for key in ('tag', 'org', 'course', 'category', 'name', 'revision')
         ])
 
-    def get_items(self, course_id, settings=None, content=None, revision=None, **kwargs):
+    def get_items(self, course_id, settings=None, content=None, key_revision=KEY_REVISION_PUBLISHED, **kwargs):
         """
         Returns:
             list of XModuleDescriptor instances for the matching items within the course with
@@ -755,11 +762,11 @@ class MongoModuleStore(ModuleStoreWriteBase):
                 and rules as kwargs below
             content (dict): fields to look for which have content scope. Follows same syntax and
                 rules as kwargs below.
-            revision (str): the revision of the items you're looking for. (only DRAFT makes sense for
-                this modulestore. If you don't provide a revision, it won't retrieve any drafts. If you
-                say DRAFT, it will only return drafts. If you want one of each matching xblock but
-                preferring draft to published, call this same method on the draft modulestore w/o a
-                revision qualifier.)
+            key_revision (str): the revision of the items you're looking for.
+                KEY_REVISION_DRAFT - only returns drafts
+                KEY_REVISION_PUBLISHED (equates to None) - only returns published
+                If you want one of each matching xblock but preferring draft to published, call this same method
+                on the draft modulestore with REVISION_OPTION_DRAFT_PREFERRED.
             kwargs (key=value): what to look for within the course.
                 Common qualifiers are ``category`` or any field name. if the target field is a list,
                 then it searches for the given value in the list not list equivalence.
@@ -769,7 +776,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
                 update_version info.
         """
         query = self._course_key_to_son(course_id)
-        query['_id.revision'] = revision
+        query['_id.revision'] = key_revision
         for field in ['category', 'name']:
             if field in kwargs:
                 query['_id.' + field] = kwargs.pop(field)
@@ -944,7 +951,10 @@ class MongoModuleStore(ModuleStoreWriteBase):
           thus whether the item's published information should be updated.
         """
         try:
-            definition_data = self._convert_reference_fields_to_strings(xblock, xblock.get_explicitly_set_fields_by_scope())
+            definition_data = self._convert_reference_fields_to_strings(
+                xblock,
+                xblock.get_explicitly_set_fields_by_scope()
+            )
             payload = {
                 'definition.data': definition_data,
                 'metadata': self._convert_reference_fields_to_strings(xblock, own_metadata(xblock)),
@@ -993,7 +1003,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
                         value[key] = subvalue.to_deprecated_string()
         return jsonfields
 
-    def get_parent_location(self, location, revision=PUBLISHED, **kwargs):
+    def get_parent_location(self, location, revision=REVISION_OPTION_PUBLISHED_ONLY, **kwargs):
         '''
         Find the location that is the parent of this location in this course.
 
@@ -1001,20 +1011,21 @@ class MongoModuleStore(ModuleStoreWriteBase):
 
         Args:
             revision:
-                PUBLISHED - return only the PUBLISHED parent if it exists, else returns None
-                DRAFT - return either the DRAFT or PUBLISHED parent, preferring DRAFT, if parent(s) exists,
-                  else returns None
+                REVISION_OPTION_PUBLISHED_ONLY - return only the PUBLISHED parent if it exists, else returns None
+                REVISION_OPTION_DRAFT_PREFERRED - return either the DRAFT or PUBLISHED parent,
+                    preferring DRAFT, if parent(s) exists,
+                    else returns None
         '''
         assert location.revision is None
-        assert revision == PUBLISHED or revision == DRAFT
+        assert revision == REVISION_OPTION_PUBLISHED_ONLY or revision == REVISION_OPTION_DRAFT_PREFERRED
 
         # create a query with tag, org, course, and the children field set to the given location
         query = self._course_key_to_son(location.course_key)
         query['definition.children'] = location.to_deprecated_string()
 
         # if only looking for the PUBLISHED parent, set the revision in the query to None
-        if revision == PUBLISHED:
-            query['_id.revision'] = None
+        if revision == REVISION_OPTION_PUBLISHED_ONLY:
+            query['_id.revision'] = KEY_REVISION_PUBLISHED
 
         # query the collection, sorting by DRAFT first
         parents = self.collection.find(query, {'_id': True}, sort=[SORT_REVISION_FAVOR_DRAFT])
@@ -1023,7 +1034,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
             # no parents were found
             return None
 
-        if revision == PUBLISHED:
+        if revision == REVISION_OPTION_PUBLISHED_ONLY:
             if parents.count() > 1:
                 # should never have multiple PUBLISHED parents
                 raise ReferentialIntegrityError(
@@ -1040,7 +1051,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
             # since we sorted by SORT_REVISION_FAVOR_DRAFT, the 0'th parent is the one we want
             found_id = parents[0]['_id']
             # don't disclose revision outside modulestore
-            return Location._from_deprecated_son(found_id, location.course_key.run).replace(revision=None)
+            return as_published(Location._from_deprecated_son(found_id, location.course_key.run))
 
     def get_modulestore_type(self, course_key=None):
         """
@@ -1069,7 +1080,7 @@ class MongoModuleStore(ModuleStoreWriteBase):
             if item['_id']['category'] != 'course':
                 # It would be nice to change this method to return UsageKeys instead of the deprecated string.
                 item_locs.add(
-                    Location._from_deprecated_son(item['_id'], course_key.run).replace(revision=None).to_deprecated_string()
+                    as_published(Location._from_deprecated_son(item['_id'], course_key.run)).to_deprecated_string()
                 )
             all_reachable = all_reachable.union(item.get('definition', {}).get('children', []))
         item_locs -= all_reachable
