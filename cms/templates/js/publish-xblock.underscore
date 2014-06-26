@@ -1,0 +1,25 @@
+<h4 class="header">
+    <% if (published && !has_changes) { %>
+       <%= gettext("Published") %>
+    <% } else if (published && has_changes) { %>
+       <%= gettext("Draft (Unpublished changes)") %>
+    <% } else { %>
+       <%= gettext("Draft (Unpublished)") %>
+    <% } %>
+</h4>
+<div class="window-contents">
+    <div class="last-updated">
+        <span>Lasted edited on </span>
+        <span><%= edited_on %></span>
+        <span> by </span>
+        <span><%= edited_by %></span>
+    </div>
+    <a href="#" class="button action-button publish-button">
+        <span class="action-button-text">Publish</span>
+    </a>
+    <a href="#" class="button action-button discard-changes-button">
+        <span class="action-button-text">Discard Changes</span>
+    </a>
+</div>
+
+

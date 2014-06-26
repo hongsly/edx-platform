@@ -12,6 +12,8 @@ from xmodule.modulestore.exceptions import ItemNotFoundError
 from edxmako.shortcuts import render_to_response
 
 from xmodule.modulestore.django import modulestore
+from django.contrib.auth.models import User
+from util.date_utils import get_default_time_display
 
 from xblock.core import XBlock
 from xblock.django.request import webob_to_django_response, django_to_webob_request
@@ -177,6 +179,7 @@ def container_handler(request, usage_key_string):
 
         is_unit_page = is_unit(xblock)
         unit = xblock if is_unit_page else None
+        unit_publish_state = compute_publish_state(unit) if unit else None
 
         while parent and parent.category != 'course':
             if unit is None and is_unit(parent):
@@ -187,13 +190,20 @@ def container_handler(request, usage_key_string):
 
         subsection = get_parent_xblock(unit) if unit else None
         section = get_parent_xblock(subsection) if subsection else None
-        # TODO: correct with publishing story.
-        unit_publish_state = 'draft'
+
+        xblock_info = {
+            "id": str(usage_key),
+            "display_name": xblock.display_name_with_default,
+            "category": xblock.category,
+            "has_changes": get_modulestore(usage_key).has_changes(usage_key),
+            "published": unit_publish_state in (PublishState.public, PublishState.draft),
+            "edited_on": get_default_time_display(xblock.edited_on) if xblock.edited_on else None,
+            "edited_by": User.objects.get(id=xblock.edited_by).username if xblock.edited_by else None
+        }
 
         return render_to_response('container.html', {
             'context_course': course,  # Needed only for display of menus at top of page.
             'xblock': xblock,
-            'unit_publish_state': unit_publish_state,
             'xblock_locator': usage_key,
             'unit': unit,
             'is_unit_page': is_unit_page,
@@ -202,6 +212,7 @@ def container_handler(request, usage_key_string):
             'new_unit_category': 'vertical',
             'ancestor_xblocks': ancestor_xblocks,
             'component_templates': json.dumps(component_templates),
+            'xblock_info': json.dumps(xblock_info)
         })
     else:
         return HttpResponseBadRequest("Only supports HTML requests")
