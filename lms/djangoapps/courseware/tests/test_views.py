@@ -73,7 +73,7 @@ class TestJumpTo(TestCase):
 
 
 @override_settings(MODULESTORE=TEST_DATA_MIXED_MODULESTORE)
-class ViewsTestCase(TestCase):
+class ViewsTestCase(ModuleStoreTestCase):
     """
     Tests for views.py methods.
     """
