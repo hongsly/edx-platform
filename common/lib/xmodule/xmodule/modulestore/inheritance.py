@@ -40,7 +40,7 @@ class InheritanceMixin(XBlockMixin):
     )
     due = Date(
         display_name=_("Due Date"),
-        help=_("Enter the date by which problems are due."),
+        help=_("Enter the default date by which problems are due."),
         scope=Scope.settings,
     )
     extended_due = Date(
@@ -53,7 +53,7 @@ class InheritanceMixin(XBlockMixin):
     )
     course_edit_method = String(
         display_name=_("Course Editor"),
-        help=_("Method with which this course is edited ('XML' or 'Studio')."),
+        help=_("Method with which this course is edited (\"XML\" or \"Studio\")."),
         default="Studio",
         scope=Scope.settings,
         deprecated=True  # Deprecated because user would not change away from Studio within Studio.
@@ -66,17 +66,17 @@ class InheritanceMixin(XBlockMixin):
     )
     xqa_key = String(
         display_name=_("XQA Key"),
-        help=_("For integration with Ike's content QA server."), scope=Scope.settings,
+        help=_("This setting is not currently supported."), scope=Scope.settings,
         deprecated=True
     )
     annotation_storage_url = String(
-        help=_("Enter the location of Annotation storage server. This setting is used by 'textannotation', 'videoannotation', and 'imageannotation' advanced modules."),
+        help=_("Enter the secret string for annotation storage. The textannotation, videoannotation, and imageannotation advanced modules require this string."),
         scope=Scope.settings,
         default="http://your_annotation_storage.com",
-        display_name=_("Url for Annotation Storage")
+        display_name=_("URL for Annotation Storage")
     )
     annotation_token_secret = String(
-        help=_("Enter the secret string used for annotation storage. This token is required by the 'textannotation', 'videoannotation', and 'imageannotation' advanced modules."),
+        help=_("Enter the location of the annotation storage server. The textannotation, videoannotation, and imageannotation advanced modules require this setting."),
         scope=Scope.settings,
         default="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
         display_name=_("Secret Token String for Annotation")
@@ -87,13 +87,13 @@ class InheritanceMixin(XBlockMixin):
     )
     showanswer = String(
         display_name=_("Show Answer"),
-        help=_("Enter the default for when to show answers to problems. Valid values are 'always', 'answered', 'attempted', 'closed', 'finished', 'past_due', and 'never'."),
+        help=_("Specify when the Show Answer button appears for each problem. Valid values are \"always\", \"answered\", \"attempted\", \"closed\", \"finished\", \"past_due\", and \"never\"."),
         scope=Scope.settings,
         default="finished",
     )
     rerandomize = String(
         display_name=_("Randomization"),
-        help=_("Enter the default for how often inputs are randomized when a student loads the problem. Valid values are 'always', 'onreset', 'never', and 'per_student'. This setting only applies to problems that have randomly generated numeric values."),
+        help=_("Specify how often variable values in a problem are randomized when a student loads the problem. Valid values are \"always\", \"onreset\", \"never\", and \"per_student\". This setting only applies to problems that have randomly generated numeric values."),
         scope=Scope.settings,
         default="never",
     )
@@ -105,7 +105,7 @@ class InheritanceMixin(XBlockMixin):
     )
     static_asset_path = String(
         display_name=_("Static Asset Path"),
-        help=_("Enter the path to use for static assets. This value overrides the Studio default c4x://."),
+        help=_("Enter the path to use for files on the Files & Uploads page. This value overrides the Studio default, c4x://."),
         scope=Scope.settings,
         default='',
     )
@@ -116,30 +116,29 @@ class InheritanceMixin(XBlockMixin):
     )
     use_latex_compiler = Boolean(
         display_name=_("Enable LaTeX Compiler"),
-        help=_("Enter true or false. If true, you can use the LaTeX templates for Advanced Problems and HTML components."),
+        help=_("Enter true or false. If true, you can use the LaTeX templates for HTML components and advanced Problem components."),
         default=False,
         scope=Scope.settings
     )
     max_attempts = Integer(
         display_name=_("Maximum Attempts"),
-        help=_("Enter the maximum number of times a student can try to answer problems. "
-               "Enter null to allow infinite attempts."),
+        help=_("Enter the maximum number of times a student can try to answer problems. This is a course-wide setting, but you can specify a different number when you create an individual problem. To allow unlimited attempts, enter null."),
         values={"min": 0}, scope=Scope.settings
     )
     matlab_api_key = String(
         display_name=_("Matlab API key"),
         help=_("Enter the API key provided by MathWorks for accessing the MATLAB Hosted Service. "
                "This key is granted for exclusive use in this course for the specified duration. "
-               "Do not share the API key with other courses and notify MathWorks immediately "
+               "Do not share the API key with other courses. Notify MathWorks immediately "
                "if you believe the key is exposed or compromised. To obtain a key for your course, "
-               "or to report and issue, please contact moocsupport@mathworks.com"),
+               "or to report an issue, please contact moocsupport@mathworks.com"),
         scope=Scope.settings
     )
     # This is should be scoped to content, but since it's defined in the policy
     # file, it is currently scoped to settings.
     user_partitions = UserPartitionList(
         display_name=_("Experiment Group Configurations"),
-        help=_("Enter the group configurations needed for partitioning students in content experiments."),
+        help=_("Enter the configurations that govern how students are grouped for content experiments."),
         default=[],
         scope=Scope.settings
     )
