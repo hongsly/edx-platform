@@ -1280,7 +1280,8 @@ class SplitMongoModuleStore(ModuleStoreWriteBase):
                             source_structure['blocks'][parent],
                             destination_blocks[parent],
                             subtree_root.block_id
-                    ))
+                        )
+                    )
             # update/create the subtree and its children in destination (skipping blacklist)
             orphans.update(
                 self._publish_subdag(

@@ -16,7 +16,7 @@ import threading
 
 from xmodule.modulestore.loc_mapper_store import LocMapperStore
 from xmodule.util.django import get_current_request_hostname
-import xmodule.modulestore
+import xmodule.modulestore  # pylint: disable=unused-import
 
 # We may not always have the request_cache module available
 try:
@@ -74,13 +74,14 @@ def create_modulestore_instance(engine, doc_store_config, options, i18n_service=
 
 
 # A singleton instance of the Mixed Modulestore
-# Later: make this thread-safe
 _MIXED_MODULESTORE = None
+
+
 def modulestore():
     """
     Returns the Mixed modulestore
     """
-    global _MIXED_MODULESTORE
+    global _MIXED_MODULESTORE  # pylint: disable=global-statement
     if _MIXED_MODULESTORE is None:
         _MIXED_MODULESTORE = create_modulestore_instance(
             settings.MODULESTORE['default']['ENGINE'],
@@ -98,7 +99,7 @@ def clear_existing_modulestores():
 
     This is useful for flushing state between unit tests.
     """
-    global _MIXED_MODULESTORE, _loc_singleton
+    global _MIXED_MODULESTORE, _loc_singleton  # pylint: disable=global-statement
     _MIXED_MODULESTORE = None
     # pylint: disable=W0603
     cache = getattr(_loc_singleton, "cache", None)
@@ -107,8 +108,10 @@ def clear_existing_modulestores():
     _loc_singleton = None
 
 
-
+# singleton instance of the loc_mapper
 _loc_singleton = None
+
+
 def loc_mapper():
     """
     Get the loc mapper which bidirectionally maps Locations to Locators. Used like modulestore() as
@@ -158,7 +161,10 @@ class ModuleI18nService(object):
         return strftime_localized(*args, **kwargs)
 
 
-_thread_cache = threading.local()
+# thread local cache
+_THREAD_CACHE = threading.local()
+
+
 def _get_modulestore_branch_setting():
     """
     Returns the branch setting for the module store from the current Django request if configured,
@@ -187,6 +193,6 @@ def _get_modulestore_branch_setting():
         return branch
 
     # cache the branch setting for this thread so we don't have to recompute it each time
-    if not hasattr(_thread_cache, 'branch_setting'):
-        _thread_cache.branch_setting = get_branch_setting()
-    return _thread_cache.branch_setting
+    if not hasattr(_THREAD_CACHE, 'branch_setting'):
+        _THREAD_CACHE.branch_setting = get_branch_setting()
+    return _THREAD_CACHE.branch_setting

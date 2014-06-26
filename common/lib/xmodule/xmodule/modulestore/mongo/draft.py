@@ -440,6 +440,7 @@ class DraftModuleStore(MongoModuleStore):
         Internal method for deleting all of the subtree whose revisions match the as_functions
         """
         course_key = location.course_key
+
         def _delete_item(current_entry, to_be_deleted):
             """
             Depth first deletion of nodes
@@ -529,6 +530,7 @@ class DraftModuleStore(MongoModuleStore):
         # and the second to do the publishing on the drafts looking for the published in the cached
         # list of published ones.)
         to_be_deleted = []
+
         def _internal_depth_first(item_location):
             """
             Depth first publishing from the given location
@@ -659,5 +661,9 @@ class DraftModuleStore(MongoModuleStore):
                 actual_setting=actual_branch_setting
             )
 
+
 def _verify_revision_is_published(location):
+    """
+    Asserts that the revision set on the given location is KEY_REVISION_PUBLISHED
+    """
     assert location.revision == KEY_REVISION_PUBLISHED

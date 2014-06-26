@@ -16,7 +16,7 @@ class Command(BaseCommand):
     help = 'List all courses ids in the Mongo Modulestore which may collide when ignoring case'
 
     def handle(self, *args, **options):
-        mstore = modulestore()._get_modulestore_by_type(MONGO_MODULESTORE_TYPE)
+        mstore = modulestore()._get_modulestore_by_type(MONGO_MODULESTORE_TYPE)  # pylint: disable=protected-access
         if hasattr(mstore, 'collection'):
             map_fn = '''
                 function () {

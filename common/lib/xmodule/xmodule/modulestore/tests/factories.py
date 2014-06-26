@@ -201,10 +201,10 @@ class ItemFactory(XModuleFactory):
 def check_mongo_calls(mongo_store, max_finds=0, max_sends=None):
     """
     Instruments the given store to count the number of calls to find (incl find_one) and the number
-    of calls to send_message which is for insert, update, and remove (if you provide max_sends). At the 
-    end of the with statement, it compares the counts to the max_finds and max_sends using a simple 
+    of calls to send_message which is for insert, update, and remove (if you provide max_sends). At the
+    end of the with statement, it compares the counts to the max_finds and max_sends using a simple
     assertLessEqual.
-    
+
     :param mongo_store: the MongoModulestore or subclass to watch
     :param max_finds: the maximum number of find calls to allow
     :param max_sends: If none, don't instrument the send calls. If non-none, count and compare to

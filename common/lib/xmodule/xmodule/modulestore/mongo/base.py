@@ -34,7 +34,7 @@ from xblock.exceptions import InvalidScopeError
 from xblock.fields import Scope, ScopeIds, Reference, ReferenceList, ReferenceValueDict
 
 from xmodule.modulestore import (
-    ModuleStoreWriteBase, MONGO_MODULESTORE_TYPE, 
+    ModuleStoreWriteBase, MONGO_MODULESTORE_TYPE,
     REVISION_OPTION_PUBLISHED_ONLY, REVISION_OPTION_DRAFT_PREFERRED,
     KEY_REVISION_DRAFT, KEY_REVISION_PUBLISHED
 )

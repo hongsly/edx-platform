@@ -33,11 +33,13 @@ XML_MODULESTORE_TYPE = 'xml'
 
 
 # Key Revision constants to use for Location and Usage Keys
+# Note: These values are persisted in the database, so should not be changed without migrations
 KEY_REVISION_DRAFT = 'draft'
 KEY_REVISION_PUBLISHED = None
 
 
 # Revision constants to use for Module Store operations
+# Note: These values are passed into store APIs and only used at run time
 
 # both DRAFT and PUBLISHED versions are queried, with preference to DRAFT versions
 REVISION_OPTION_DRAFT_PREFERRED = 'rev-opt-draft-preferred'
@@ -53,6 +55,7 @@ REVISION_OPTION_ALL = 'rev-opt-all'
 
 
 # Branch constants to use for stores, such as Mongo, that have only 2 branches: DRAFT and PUBLISHED
+# Note: These values are taken from server configuration settings, so should not be changed without alerting DevOps
 BRANCH_DRAFT_PREFERRED = 'draft'
 BRANCH_PUBLISHED_ONLY = 'published'
 

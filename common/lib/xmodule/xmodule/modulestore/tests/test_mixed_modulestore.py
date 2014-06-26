@@ -73,12 +73,12 @@ class TestMixedModuleStore(LocMapperSetupSansDjango):
                 'OPTIONS': modulestore_options
             },
             {
-               'NAME': 'xml',
-               'ENGINE': 'xmodule.modulestore.xml.XMLModuleStore',
-               'OPTIONS': {
-                   'data_dir': DATA_DIR,
-                   'default_class': 'xmodule.hidden_module.HiddenDescriptor',
-               }
+                'NAME': 'xml',
+                'ENGINE': 'xmodule.modulestore.xml.XMLModuleStore',
+                'OPTIONS': {
+                    'data_dir': DATA_DIR,
+                    'default_class': 'xmodule.hidden_module.HiddenDescriptor',
+                }
             },
         ]
     }
