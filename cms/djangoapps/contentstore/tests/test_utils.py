@@ -249,6 +249,3 @@ class XBlockVisibilityTestCase(TestCase):
             modulestore().publish(location, self.dummy_user)
 
         return vertical
-
-
-
