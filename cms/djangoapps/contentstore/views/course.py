@@ -318,7 +318,7 @@ def create_new_course(request):
         # existing xml courses this cannot be changed in CourseDescriptor.
         # # TODO get rid of defining wiki slug in this org/course/run specific way and reconcile
         # w/ xmodule.course_module.CourseDescriptor.__init__
-        wiki_slug = u"{0}.{1}.{2}".format(org, course, run)
+        wiki_slug = u"{0}.{1}.{2}".format(org, number, run)
         definition_data = {'wiki_slug': wiki_slug}
 
         # Create the course then fetch it from the modulestore
