@@ -7,7 +7,7 @@ from xmodule.contentstore.content import XASSET_LOCATION_TAG
 
 import logging
 
-from .content import StaticContent, ContentStore, StaticContentStream
+from .content import StaticContent, ContentStore, StaticContentStream, XASSET_LOCATION_TAG
 from xmodule.exceptions import NotFoundError
 from fs.osfs import OSFS
 import os
@@ -276,5 +276,11 @@ class MongoContentStore(ContentStore):
         # codifying the original order which pymongo used for the dicts coming out of location_to_dict
         # stability of order is more important than sanity of order as any changes to order make things
         # unfindable
-        ordered_key_fields = ['category', 'name', 'course', 'tag', 'org', 'revision']
-        return SON((field_name, getattr(location, field_name)) for field_name in ordered_key_fields)
+        return SON([
+            ('category', location.asset_type),
+            ('name', location.path),
+            ('course', location.course_key.course),
+            ('tag', XASSET_LOCATION_TAG),
+            ('org', location.course_key.org),
+            ('revision', location.course_key.branch),
+        ])
