@@ -8,6 +8,7 @@ from django.test.utils import override_settings
 
 from contentstore import utils
 from xmodule.modulestore.tests.factories import CourseFactory
+from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from opaque_keys.edx.keys import CourseKey
 
 
@@ -156,7 +157,7 @@ class ExtraPanelTabTestCase(TestCase):
                 self.assertEqual(actual_tabs, expected_tabs)
 
 
-class CourseImageTestCase(TestCase):
+class CourseImageTestCase(ModuleStoreTestCase):
     """Tests for course image URLs."""
 
     def test_get_image_url(self):

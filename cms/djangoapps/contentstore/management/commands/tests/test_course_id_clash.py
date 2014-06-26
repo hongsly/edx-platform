@@ -1,10 +1,10 @@
 import sys
 from StringIO import StringIO
-from django.test import TestCase
+from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from django.core.management import call_command
 from xmodule.modulestore.tests.factories import CourseFactory
 
-class ClashIdTestCase(TestCase):
+class ClashIdTestCase(ModuleStoreTestCase):
     """
     Test for course_id_clash.
     """

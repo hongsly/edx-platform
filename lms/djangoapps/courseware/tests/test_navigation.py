@@ -26,8 +26,8 @@ class TestNavigation(ModuleStoreTestCase, LoginEnrollmentTestCase):
 
     def setUp(self):
 
-        self.test_course = CourseFactory.create(display_name='Robot_Sub_Course')
-        self.course = CourseFactory.create(display_name='Robot_Super_Course')
+        self.test_course = CourseFactory.create(course=998, display_name='Robot_Sub_Course')
+        self.course = CourseFactory.create(course=999, display_name='Robot_Super_Course')
         self.chapter0 = ItemFactory.create(parent_location=self.course.location,
                                            display_name='Overview')
         self.chapter9 = ItemFactory.create(parent_location=self.course.location,
