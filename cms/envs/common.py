@@ -25,6 +25,7 @@ Longer TODO:
 # pylint: disable=W0401, W0611, W0614
 
 import imp
+import os
 import sys
 import lms.envs.common
 # Although this module itself may not use these imported variables, other dependent modules may.
@@ -101,6 +102,9 @@ FEATURES = {
 
     # Turn off Advanced Security by default
     'ADVANCED_SECURITY': False,
+
+    # Toggles Group Configuration editing functionality
+    'ENABLE_GROUP_CONFIGURATIONS': os.environ.get('FEATURE_GROUP_CONFIGURATIONS'),
 }
 ENABLE_JASMINE = False
 
@@ -247,7 +251,7 @@ XBLOCK_MIXINS = (LmsBlockMixin, InheritanceMixin, XModuleMixin)
 XBLOCK_SELECT_FUNCTION = prefer_xmodules
 
 ############################ Modulestore Configuration ################################
-MODULESTORE_BRANCH = 'draft'
+MODULESTORE_BRANCH = 'draft-preferred'
 
 ############################ DJANGO_BUILTINS ################################
 # Change DEBUG/TEMPLATE_DEBUG in your environment settings files, not here

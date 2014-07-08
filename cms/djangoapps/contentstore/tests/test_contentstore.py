@@ -27,10 +27,8 @@ from xmodule.contentstore.content import StaticContent
 from xmodule.contentstore.django import contentstore, _CONTENTSTORE
 from xmodule.contentstore.utils import restore_asset_from_trashcan, empty_asset_trashcan
 from xmodule.exceptions import NotFoundError, InvalidVersionError
-from xmodule.modulestore import (
-    mongo, MONGO_MODULESTORE_TYPE, PublishState,
-    REVISION_OPTION_PUBLISHED_ONLY, REVISION_OPTION_DRAFT_ONLY, KEY_REVISION_PUBLISHED, BRANCH_PUBLISHED_ONLY
-)
+from xmodule.modulestore import mongo, PublishState, ModuleStoreEnum
+from xmodule.modulestore.mongo.base import MongoRevisionKey
 from xmodule.modulestore.mixed import store_branch_setting
 from xmodule.modulestore.django import modulestore
 from xmodule.modulestore.exceptions import ItemNotFoundError
@@ -133,7 +131,6 @@ class ContentStoreToyCourseTest(ContentStoreTestCase):
         descriptor = store.get_items(course.id, category='vertical',)
         resp = self.client.get_html(get_url('unit_handler', descriptor[0].location))
         self.assertEqual(resp.status_code, 200)
-        _test_no_locations(self, resp)
 
         for expected in expected_types:
             self.assertIn(expected, resp.content)
@@ -159,7 +156,6 @@ class ContentStoreToyCourseTest(ContentStoreTestCase):
 
         resp = self.client.get_html(get_url('unit_handler', usage_key))
         self.assertEqual(resp.status_code, 400)
-        _test_no_locations(self, resp, status_code=400)
 
     def check_edit_unit(self, test_course_name):
         _, course_items = import_from_xml(modulestore(), self.user.id, 'common/test/data/', [test_course_name])
@@ -204,13 +200,13 @@ class ContentStoreToyCourseTest(ContentStoreTestCase):
         store.convert_to_draft(html_module_from_draft_store.location, self.user.id)
 
         # Query get_items() and find the html item. This should just return back a single item (not 2).
-        direct_store_items = store.get_items(course_key, revision=REVISION_OPTION_PUBLISHED_ONLY)
+        direct_store_items = store.get_items(course_key, revision=ModuleStoreEnum.RevisionOption.published_only)
         html_items_from_direct_store = [item for item in direct_store_items if (item.location == html_usage_key)]
         self.assertEqual(len(html_items_from_direct_store), 1)
         self.assertFalse(getattr(html_items_from_direct_store[0], 'is_draft', False))
 
         # Fetch from the draft store.
-        draft_store_items = store.get_items(course_key, revision=REVISION_OPTION_DRAFT_ONLY)
+        draft_store_items = store.get_items(course_key, revision=ModuleStoreEnum.RevisionOption.draft_only)
         html_items_from_draft_store = [item for item in draft_store_items if (item.location == html_usage_key)]
         self.assertEqual(len(html_items_from_draft_store), 1)
         self.assertTrue(getattr(html_items_from_draft_store[0], 'is_draft', False))
@@ -366,8 +362,6 @@ class ContentStoreToyCourseTest(ContentStoreTestCase):
             get_url('xblock_view_handler', usage_key, kwargs={'view_name': 'container_preview'})
         )
         self.assertEqual(resp.status_code, 200)
-        # TODO: uncomment when preview no longer has locations being returned.
-        # _test_no_locations(self, resp)
 
         # These are the data-ids of the xblocks contained in the vertical.
         self.assertContains(resp, 'edX+toy+2012_Fall+video+sample_video')
@@ -536,7 +530,7 @@ class ContentStoreToyCourseTest(ContentStoreTestCase):
         url = reverse_course_url(
             'assets_handler',
             course.id,
-            kwargs={'asset_key_string': course.id.make_asset_key('asset', 'sample_static.txt')}
+            kwargs={'asset_key_string': unicode(course.id.make_asset_key('asset', 'sample_static.txt'))}
         )
         resp = self.client.delete(url)
         self.assertEqual(resp.status_code, 204)
@@ -663,9 +657,9 @@ class ContentStoreToyCourseTest(ContentStoreTestCase):
         clone_course(module_store, content_store, source_course_id, dest_course_id, self.user.id)
 
         # first assert that all draft content got cloned as well
-        draft_items = module_store.get_items(source_course_id, revision=REVISION_OPTION_DRAFT_ONLY)
+        draft_items = module_store.get_items(source_course_id, revision=ModuleStoreEnum.RevisionOption.draft_only)
         self.assertGreater(len(draft_items), 0)
-        draft_clone_items = module_store.get_items(dest_course_id, revision=REVISION_OPTION_DRAFT_ONLY)
+        draft_clone_items = module_store.get_items(dest_course_id, revision=ModuleStoreEnum.RevisionOption.draft_only)
         self.assertGreater(len(draft_clone_items), 0)
         self.assertEqual(len(draft_items), len(draft_clone_items))
 
@@ -763,7 +757,6 @@ class ContentStoreToyCourseTest(ContentStoreTestCase):
     def test_bad_contentstore_request(self):
         resp = self.client.get_html('http://localhost:8001/c4x/CDX/123123/asset/&images_circuits_Lab7Solution2.png')
         self.assertEqual(resp.status_code, 400)
-        _test_no_locations(self, resp, 400)
 
     def test_rewrite_nonportable_links_on_import(self):
         module_store = modulestore()
@@ -868,7 +861,7 @@ class ContentStoreToyCourseTest(ContentStoreTestCase):
 
         # add the new private and new public to list of children
         sequential = module_store.get_item(course_id.make_usage_key('sequential', 'vertical_sequential'))
-        private_location_no_draft = private_vertical.location.replace(revision=KEY_REVISION_PUBLISHED)
+        private_location_no_draft = private_vertical.location.replace(revision=MongoRevisionKey.published)
         sequential.children.append(private_location_no_draft)
         sequential.children.append(public_vertical_location)
         module_store.update_item(sequential, self.user.id)
@@ -939,7 +932,11 @@ class ContentStoreToyCourseTest(ContentStoreTestCase):
             target_course_id=course_id,
         )
 
-        items = module_store.get_items(course_id, category='vertical', revision=REVISION_OPTION_PUBLISHED_ONLY)
+        items = module_store.get_items(
+            course_id,
+            category='vertical',
+            revision=ModuleStoreEnum.RevisionOption.published_only
+        )
         self._check_verticals(items)
 
         def verify_item_publish_state(item, publish_state):
@@ -1124,7 +1121,7 @@ class ContentStoreToyCourseTest(ContentStoreTestCase):
         self.assertContains(resp, '/c4x/edX/toy/asset/handouts_sample_handout.txt')
 
     def test_prefetch_children(self):
-        mongo_store = modulestore()._get_modulestore_by_type(MONGO_MODULESTORE_TYPE)
+        mongo_store = modulestore()._get_modulestore_by_type(ModuleStoreEnum.Type.mongo)
         import_from_xml(modulestore(), self.user.id, 'common/test/data/', ['toy'])
         course_id = SlashSeparatedCourseKey('edX', 'toy', '2012_Fall')
 
@@ -1132,7 +1129,7 @@ class ContentStoreToyCourseTest(ContentStoreTestCase):
         mongo_store.collection.find = wrapper.find
 
         # set the branch to 'publish' in order to prevent extra lookups of draft versions
-        with store_branch_setting(mongo_store, BRANCH_PUBLISHED_ONLY):
+        with store_branch_setting(mongo_store, ModuleStoreEnum.Branch.published_only):
             course = mongo_store.get_course(course_id, depth=2)
 
             # make sure we haven't done too many round trips to DB
@@ -1194,7 +1191,6 @@ class ContentStoreToyCourseTest(ContentStoreTestCase):
         for descriptor in items:
             resp = self.client.get_html(get_url('unit_handler', descriptor.location))
             self.assertEqual(resp.status_code, 200)
-            _test_no_locations(self, resp)
 
 
 class ContentStoreTest(ContentStoreTestCase):
@@ -1473,7 +1469,6 @@ class ContentStoreTest(ContentStoreTestCase):
             status_code=200,
             html=True
         )
-        _test_no_locations(self, resp)
 
     def test_course_factory(self):
         """Test that the course factory works correctly."""
@@ -1496,7 +1491,6 @@ class ContentStoreTest(ContentStoreTestCase):
             status_code=200,
             html=True
         )
-        _test_no_locations(self, resp)
 
     def test_course_overview_view_with_course(self):
         """Test viewing the course overview page with an existing course"""
@@ -1520,7 +1514,6 @@ class ContentStoreTest(ContentStoreTestCase):
         }
 
         resp = self.client.ajax_post(reverse_url('xblock_handler'), section_data)
-        _test_no_locations(self, resp, html=False)
 
         self.assertEqual(resp.status_code, 200)
         data = parse_json(resp)
@@ -1561,7 +1554,6 @@ class ContentStoreTest(ContentStoreTestCase):
                 get_url(handler, course_key, 'course_key_string')
             )
             self.assertEqual(resp.status_code, 200)
-            _test_no_locations(self, resp)
 
         _, course_items = import_from_xml(modulestore(), self.user.id, 'common/test/data/', ['simple'])
         course_key = course_items[0].id
@@ -1587,20 +1579,17 @@ class ContentStoreTest(ContentStoreTestCase):
         subsection_key = course_key.make_usage_key('sequential', 'test_sequence')
         resp = self.client.get_html(get_url('subsection_handler', subsection_key))
         self.assertEqual(resp.status_code, 200)
-        _test_no_locations(self, resp)
 
         # go look at the Edit page
         unit_key = course_key.make_usage_key('vertical', 'test_vertical')
         resp = self.client.get_html(get_url('unit_handler', unit_key))
         self.assertEqual(resp.status_code, 200)
-        _test_no_locations(self, resp)
 
         def delete_item(category, name):
             """ Helper method for testing the deletion of an xblock item. """
             item_key = course_key.make_usage_key(category, name)
             resp = self.client.delete(get_url('xblock_handler', item_key))
             self.assertEqual(resp.status_code, 204)
-            _test_no_locations(self, resp, status_code=204, html=False)
 
         # delete a component
         delete_item(category='html', name='test_html')
@@ -1803,7 +1792,6 @@ class ContentStoreTest(ContentStoreTestCase):
         Show the course overview page.
         """
         resp = self.client.get_html(get_url('course_handler', course_key, 'course_key_string'))
-        _test_no_locations(self, resp)
         return resp
 
     def test_wiki_slug(self):
@@ -1885,7 +1873,6 @@ class EntryPageTestCase(TestCase):
     def _test_page(self, page, status_code=200):
         resp = self.client.get_html(page)
         self.assertEqual(resp.status_code, status_code)
-        _test_no_locations(self, resp, status_code)
 
     def test_how_it_works(self):
         self._test_page("/howitworks")
@@ -1923,19 +1910,3 @@ def _course_factory_create_course():
 def _get_course_id(course_data):
     """Returns the course ID (org/number/run)."""
     return SlashSeparatedCourseKey(course_data['org'], course_data['number'], course_data['run'])
-
-
-def _test_no_locations(test, resp, status_code=200, html=True):
-    """
-    Verifies that "i4x", which appears in old locations, but not
-    new locators, does not appear in the HTML response output.
-    Used to verify that database refactoring is complete.
-    """
-    test.assertNotContains(resp, 'i4x', status_code=status_code, html=html)
-    if html:
-        # For HTML pages, it is nice to call the method with html=True because
-        # it checks that the HTML properly parses. However, it won't find i4x usages
-        # in JavaScript blocks.
-        content = resp.content
-        hits = len(re.findall(r"(?<!jump_to/)i4x://", content))
-        test.assertEqual(hits, 0, "i4x found outside of LMS jump-to links")
