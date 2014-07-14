@@ -109,7 +109,7 @@ def course_handler(request, course_key_string=None):
         index entry.
     PUT
         json: update this course (index entry not xblock) such as repointing head, changing display name, org,
-        offering. Return same json as above.
+        course, run. Return same json as above.
     DELETE
         json: delete this branch from this course (leaving off /branch/draft would imply delete the course)
     """
@@ -336,7 +336,9 @@ def create_new_course(request):
         # Creating the course raises InvalidLocationError if an existing course with this org/name is found
         new_course = modulestore().create_course(
             course_key.org,
-            course_key.offering,
+            course_key.course,
+            course_key.run,
+            request.user.id,
             fields=fields,
         )
 

@@ -30,6 +30,8 @@ from student.views import (process_survey_link, _cert_info,
                            change_enrollment, complete_course_mode_info)
 from student.tests.factories import UserFactory, CourseModeFactory
 
+from certificates.models import CertificateStatuses
+from certificates.tests.factories import GeneratedCertificateFactory
 import shoppingcart
 
 log = logging.getLogger(__name__)
@@ -212,6 +214,7 @@ class DashboardTest(TestCase):
         self.assertFalse(course_mode_info['show_upsell'])
         self.assertIsNone(course_mode_info['days_for_upsell'])
 
+    @unittest.skipUnless(settings.ROOT_URLCONF == 'lms.urls', 'Test only valid in lms')
     def test_refundable(self):
         verified_mode = CourseModeFactory.create(
             course_id=self.course.id,
@@ -227,6 +230,26 @@ class DashboardTest(TestCase):
         verified_mode.save()
         self.assertFalse(enrollment.refundable())
 
+    @unittest.skipUnless(settings.ROOT_URLCONF == 'lms.urls', 'Test only valid in lms')
+    def test_refundable_when_certificate_exists(self):
+        verified_mode = CourseModeFactory.create(
+            course_id=self.course.id,
+            mode_slug='verified',
+            mode_display_name='Verified',
+            expiration_datetime=datetime.now(pytz.UTC) + timedelta(days=1)
+        )
+        enrollment = CourseEnrollment.enroll(self.user, self.course.id, mode='verified')
+
+        self.assertTrue(enrollment.refundable())
+
+        generated_certificate = GeneratedCertificateFactory.create(
+            user=self.user,
+            course_id=self.course.id,
+            status=CertificateStatuses.downloadable,
+            mode='verified'
+        )
+
+        self.assertFalse(enrollment.refundable())
 
 class EnrollInCourseTest(TestCase):
     """Tests enrolling and unenrolling in courses."""
@@ -285,6 +308,18 @@ class EnrollInCourseTest(TestCase):
     def assert_no_events_were_emitted(self):
         """Ensures no events were emitted since the last event related assertion"""
         self.assertFalse(self.mock_tracker.emit.called)  # pylint: disable=maybe-no-member
+        self.mock_tracker.reset_mock()
+
+    def assert_enrollment_mode_change_event_was_emitted(self, user, course_key, mode):
+        """Ensures an enrollment mode change event was emitted"""
+        self.mock_tracker.emit.assert_called_once_with(  # pylint: disable=maybe-no-member
+            'edx.course.enrollment.mode_changed',
+            {
+                'course_id': course_key.to_deprecated_string(),
+                'user_id': user.pk,
+                'mode': mode
+            }
+        )
         self.mock_tracker.reset_mock()
 
     def assert_enrollment_event_was_emitted(self, user, course_key):
@@ -423,6 +458,23 @@ class EnrollInCourseTest(TestCase):
         CourseEnrollment.enroll(user, course_id)
         self.assertTrue(CourseEnrollment.is_enrolled(user, course_id))
         self.assert_enrollment_event_was_emitted(user, course_id)
+
+    def test_change_enrollment_modes(self):
+        user = User.objects.create(username="justin", email="jh@fake.edx.org")
+        course_id = SlashSeparatedCourseKey("edX", "Test101", "2013")
+
+        CourseEnrollment.enroll(user, course_id)
+        self.assert_enrollment_event_was_emitted(user, course_id)
+
+        CourseEnrollment.enroll(user, course_id, "audit")
+        self.assert_enrollment_mode_change_event_was_emitted(user, course_id, "audit")
+
+        # same enrollment mode does not emit an event
+        CourseEnrollment.enroll(user, course_id, "audit")
+        self.assert_no_events_were_emitted()
+
+        CourseEnrollment.enroll(user, course_id, "honor")
+        self.assert_enrollment_mode_change_event_was_emitted(user, course_id, "honor")
 
 
 @override_settings(MODULESTORE=TEST_DATA_MIXED_MODULESTORE)

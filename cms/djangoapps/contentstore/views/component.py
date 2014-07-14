@@ -409,6 +409,9 @@ def _get_item_in_course(request, usage_key):
 
     Verifies that the caller has permission to access this item.
     """
+    # usage_key's course_key may have an empty run property
+    usage_key = usage_key.replace(course_key=modulestore().fill_in_run(usage_key.course_key))
+
     course_key = usage_key.course_key
 
     if not has_course_access(request.user, course_key):
@@ -449,8 +452,8 @@ def component_handler(request, usage_key_string, handler, suffix=''):
         log.info("XBlock %s attempted to access missing handler %r", descriptor, handler, exc_info=True)
         raise Http404
 
-    # unintentional update to handle any side effects of handle call; so, request user didn't author
-    # the change
-    modulestore().update_item(descriptor, None)
+    # unintentional update to handle any side effects of handle call
+    # could potentially be updating actual course data or simply caching its values
+    modulestore().update_item(descriptor, request.user.id)
 
     return webob_to_django_response(resp)

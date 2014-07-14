@@ -9,7 +9,6 @@ from django.contrib.auth.models import AnonymousUser
 
 from xmodule.course_module import CourseDescriptor
 from xmodule.error_module import ErrorDescriptor
-from opaque_keys.edx.locations import Location
 from xmodule.x_module import XModule
 
 from xblock.core import XBlock
@@ -23,7 +22,7 @@ from student.roles import (
     GlobalStaff, CourseStaffRole, CourseInstructorRole,
     OrgStaffRole, OrgInstructorRole, CourseBetaTesterRole
 )
-from opaque_keys.edx.keys import CourseKey
+from opaque_keys.edx.keys import CourseKey, UsageKey
 DEBUG_ACCESS = False
 
 log = logging.getLogger(__name__)
@@ -42,6 +41,7 @@ def has_access(user, action, obj, course_key=None):
 
     Things this module understands:
     - start dates for modules
+    - visible_to_staff_only for modules
     - DISABLE_START_DATES
     - different access for instructor, staff, course staff, and students.
 
@@ -85,7 +85,7 @@ def has_access(user, action, obj, course_key=None):
     if isinstance(obj, CourseKey):
         return _has_access_course_key(user, action, obj)
 
-    if isinstance(obj, Location):
+    if isinstance(obj, UsageKey):
         return _has_access_location(user, action, obj, course_key)
 
     if isinstance(obj, basestring):
@@ -248,6 +248,9 @@ def _has_access_descriptor(user, action, descriptor, course_key=None):
         students to see modules.  If not, views should check the course, so we
         don't have to hit the enrollments table on every module load.
         """
+        if descriptor.visible_to_staff_only and not _has_staff_access_to_descriptor(user, descriptor, course_key):
+            return False
+
         # If start dates are off, can always load
         if settings.FEATURES['DISABLE_START_DATES'] and not is_masquerading_as_student(user):
             debug("Allow: DISABLE_START_DATES")
