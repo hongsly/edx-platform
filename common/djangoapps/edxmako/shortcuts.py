@@ -77,6 +77,28 @@ def marketing_link_context_processor(request):
     )
 
 
+def open_source_footer_context_processor(request):
+    """
+    Checks the site name to determine whether to use the edX.org footer or the Open Source Footer.
+    """
+    return dict(
+        [
+            ("IS_EDX_DOMAIN", settings.FEATURES.get('IS_EDX_DOMAIN', False))
+        ]
+    )
+
+
+def microsite_footer_context_processor(request):
+    """
+    Checks the site name to determine whether to use the edX.org footer or the Open Source Footer.
+    """
+    return dict(
+        [
+            ("IS_REQUEST_IN_MICROSITE", microsite.is_request_in_microsite())
+        ]
+    )
+
+
 def render_to_string(template_name, dictionary, context=None, namespace='main'):
 
     # see if there is an override template defined in the microsite
@@ -92,8 +114,8 @@ def render_to_string(template_name, dictionary, context=None, namespace='main'):
     context_instance['marketing_link'] = marketing_link
 
     # In various testing contexts, there might not be a current request context.
-    if edxmako.middleware.requestcontext is not None:
-        for d in edxmako.middleware.requestcontext:
+    if getattr(edxmako.middleware.REQUEST_CONTEXT, "context", None):
+        for d in edxmako.middleware.REQUEST_CONTEXT.context:
             context_dictionary.update(d)
     for d in context_instance:
         context_dictionary.update(d)

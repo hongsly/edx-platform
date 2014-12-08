@@ -13,18 +13,19 @@ import os
 import json
 from bson.son import SON
 from opaque_keys.edx.keys import AssetKey
+from xmodule.modulestore.django import ASSET_IGNORE_REGEX
 
 
 class MongoContentStore(ContentStore):
 
-    # pylint: disable=W0613
+    # pylint: disable=unused-argument
     def __init__(self, host, db, port=27017, user=None, password=None, bucket='fs', collection=None, **kwargs):
         """
         Establish the connection with the mongo backend and connect to the collections
 
         :param collection: ignores but provided for consistency w/ other doc_store_config patterns
         """
-        logging.debug('Using MongoDB for static content serving at host={0} db={1}'.format(host, db))
+        logging.debug('Using MongoDB for static content serving at host={0} port={1} db={2}'.format(host, port, db))
         _db = pymongo.database.Database(
             pymongo.MongoClient(
                 host=host,
@@ -42,11 +43,18 @@ class MongoContentStore(ContentStore):
 
         self.fs_files = _db[bucket + ".files"]  # the underlying collection GridFS uses
 
-    def drop_database(self):
+    def close_connections(self):
         """
-        Only for use by test code. Removes the database!
+        Closes any open connections to the underlying databases
         """
         self.fs_files.database.connection.close()
+
+    def _drop_database(self):
+        """
+        A destructive operation to drop the underlying database and close all connections.
+        Intended to be used by test code for cleanup.
+        """
+        self.close_connections()
         self.fs_files.database.connection.drop_database(self.fs_files.database)
 
     def save(self, content):
@@ -58,7 +66,7 @@ class MongoContentStore(ContentStore):
         self.delete(content_id)  # delete is a noop if the entry doesn't exist; so, don't waste time checking
 
         thumbnail_location = content.thumbnail_location.to_deprecated_list_repr() if content.thumbnail_location else None
-        with self.fs.new_file(_id=content_id, filename=content.get_url_path(), content_type=content.content_type,
+        with self.fs.new_file(_id=content_id, filename=unicode(content.location), content_type=content.content_type,
                               displayname=content.name, content_son=content_son,
                               thumbnail_location=thumbnail_location,
                               import_path=content.import_path,
@@ -86,7 +94,10 @@ class MongoContentStore(ContentStore):
                 fp = self.fs.get(content_id)
                 thumbnail_location = getattr(fp, 'thumbnail_location', None)
                 if thumbnail_location:
-                    thumbnail_location = location.course_key.make_asset_key('thumbnail', thumbnail_location[4])
+                    thumbnail_location = location.course_key.make_asset_key(
+                        'thumbnail',
+                        thumbnail_location[4]
+                    )
                 return StaticContentStream(
                     location, fp.displayname, fp.content_type, fp, last_modified_at=fp.uploadDate,
                     thumbnail_location=thumbnail_location,
@@ -97,7 +108,10 @@ class MongoContentStore(ContentStore):
                 with self.fs.get(content_id) as fp:
                     thumbnail_location = getattr(fp, 'thumbnail_location', None)
                     if thumbnail_location:
-                        thumbnail_location = location.course_key.make_asset_key('thumbnail', thumbnail_location[4])
+                        thumbnail_location = location.course_key.make_asset_key(
+                            'thumbnail',
+                            thumbnail_location[4]
+                        )
                     return StaticContent(
                         location, fp.displayname, fp.content_type, fp.read(), last_modified_at=fp.uploadDate,
                         thumbnail_location=thumbnail_location,
@@ -139,9 +153,6 @@ class MongoContentStore(ContentStore):
         assets, __ = self.get_all_content_for_course(course_key)
 
         for asset in assets:
-            asset_id = asset.get('content_son', asset['_id'])
-            # assuming course_key's deprecated flag is controlling rather than presence or absence of 'run' in _id
-            asset_location = course_key.make_asset_key(asset_id['category'], asset_id['name'])
             # TODO: On 6/19/14, I had to put a try/except around this
             # to export a course. The course failed on JSON files in
             # the /static/ directory placed in it with an import.
@@ -150,13 +161,13 @@ class MongoContentStore(ContentStore):
             #
             # When debugging course exports, this might be a good place
             # to look. -- pmitros
-            self.export(asset_location, output_directory)
+            self.export(asset['asset_key'], output_directory)
             for attr, value in asset.iteritems():
-                if attr not in ['_id', 'md5', 'uploadDate', 'length', 'chunkSize']:
-                    policy.setdefault(asset_location.name, {})[attr] = value
+                if attr not in ['_id', 'md5', 'uploadDate', 'length', 'chunkSize', 'asset_key']:
+                    policy.setdefault(asset['asset_key'].name, {})[attr] = value
 
         with open(assets_policy_file, 'w') as f:
-            json.dump(policy, f)
+            json.dump(policy, f, sort_keys=True, indent=4)
 
     def get_all_content_thumbnails_for_course(self, course_key):
         return self._get_all_content_for_course(course_key, get_thumbnails=True)[0]
@@ -166,25 +177,36 @@ class MongoContentStore(ContentStore):
             course_key, start=start, maxresults=maxresults, get_thumbnails=False, sort=sort
         )
 
+    def remove_redundant_content_for_courses(self):
+        """
+        Finds and removes all redundant files (Mac OS metadata files with filename ".DS_Store"
+        or filename starts with "._") for all courses
+        """
+        assets_to_delete = 0
+        for prefix in ['_id', 'content_son']:
+            query = SON([
+                ('{}.tag'.format(prefix), XASSET_LOCATION_TAG),
+                ('{}.category'.format(prefix), 'asset'),
+                ('{}.name'.format(prefix), {'$regex': ASSET_IGNORE_REGEX}),
+            ])
+            items = self.fs_files.find(query)
+            assets_to_delete = assets_to_delete + items.count()
+            for asset in items:
+                self.fs.delete(asset[prefix])
+
+            self.fs_files.remove(query)
+        return assets_to_delete
+
     def _get_all_content_for_course(self, course_key, get_thumbnails=False, start=0, maxresults=-1, sort=None):
         '''
-        Returns a list of all static assets for a course. The return format is a list of dictionary elements. Example:
+        Returns a list of all static assets for a course. The return format is a list of asset data dictionary elements.
 
-            [
-
-            {u'displayname': u'profile.jpg', u'chunkSize': 262144, u'length': 85374,
-            u'uploadDate': datetime.datetime(2012, 10, 3, 5, 41, 54, 183000), u'contentType': u'image/jpeg',
-            u'_id': {u'category': u'asset', u'name': u'profile.jpg', u'course': u'6.002x', u'tag': u'c4x',
-            u'org': u'MITx', u'revision': None}, u'md5': u'36dc53519d4b735eb6beba51cd686a0e'},
-
-            {u'displayname': u'profile.thumbnail.jpg', u'chunkSize': 262144, u'length': 4073,
-            u'uploadDate': datetime.datetime(2012, 10, 3, 5, 41, 54, 196000), u'contentType': u'image/jpeg',
-            u'_id': {u'category': u'asset', u'name': u'profile.thumbnail.jpg', u'course': u'6.002x', u'tag': u'c4x',
-            u'org': u'MITx', u'revision': None}, u'md5': u'ff1532598830e3feac91c2449eaa60d6'},
-
-            ....
-
-            ]
+        The asset data dictionaries have the following keys:
+            asset_key (:class:`opaque_keys.edx.AssetKey`): The key of the asset
+            displayname: The human-readable name of the asset
+            uploadDate (datetime.datetime): The date and time that the file was uploadDate
+            contentType: The mimetype string of the asset
+            md5: An md5 hash of the asset content
         '''
         if maxresults > 0:
             items = self.fs_files.find(
@@ -196,7 +218,14 @@ class MongoContentStore(ContentStore):
                 query_for_course(course_key, "asset" if not get_thumbnails else "thumbnail"), sort=sort
             )
         count = items.count()
-        return list(items), count
+        assets = list(items)
+
+        # We're constructing the asset key immediately after retrieval from the database so that
+        # callers are insulated from knowing how our identifiers are stored.
+        for asset in assets:
+            asset_id = asset.get('content_son', asset['_id'])
+            asset['asset_key'] = course_key.make_asset_key(asset_id['category'], asset_id['name'])
+        return assets, count
 
     def set_attr(self, asset_key, attr, value=True):
         """
@@ -281,7 +310,9 @@ class MongoContentStore(ContentStore):
                 asset_id = asset_key
             else:  # add the run, since it's the last field, we're golden
                 asset_key['run'] = dest_course_key.run
-                asset_id = unicode(dest_course_key.make_asset_key(asset_key['category'], asset_key['name']))
+                asset_id = unicode(
+                    dest_course_key.make_asset_key(asset_key['category'], asset_key['name']).for_branch(None)
+                )
 
             self.fs.put(
                 source_content.read(),
@@ -324,7 +355,7 @@ class MongoContentStore(ContentStore):
             # NOTE, there's no need to state that run doesn't exist in the negative case b/c access via
             # SON requires equivalence (same keys and values in exact same order)
             dbkey['run'] = location.run
-            content_id = unicode(location)
+            content_id = unicode(location.for_branch(None))
         return content_id, dbkey
 
     def make_id_son(self, fs_entry):
@@ -343,6 +374,36 @@ class MongoContentStore(ContentStore):
             dbkey['run'] = _id_field['run']
         fs_entry['_id'] = dbkey
         return dbkey
+
+    def ensure_indexes(self):
+
+        # Index needed thru 'category' by `_get_all_content_for_course` and others. That query also takes a sort
+        # which can be `uploadDate`, `display_name`,
+
+        self.fs_files.create_index(
+            [('_id.org', pymongo.ASCENDING), ('_id.course', pymongo.ASCENDING), ('_id.name', pymongo.ASCENDING)],
+            sparse=True
+        )
+        self.fs_files.create_index(
+            [('content_son.org', pymongo.ASCENDING), ('content_son.course', pymongo.ASCENDING), ('content_son.name', pymongo.ASCENDING)],
+            sparse=True
+        )
+        self.fs_files.create_index(
+            [('_id.org', pymongo.ASCENDING), ('_id.course', pymongo.ASCENDING), ('uploadDate', pymongo.ASCENDING)],
+            sparse=True
+        )
+        self.fs_files.create_index(
+            [('_id.org', pymongo.ASCENDING), ('_id.course', pymongo.ASCENDING), ('display_name', pymongo.ASCENDING)],
+            sparse=True
+        )
+        self.fs_files.create_index(
+            [('content_son.org', pymongo.ASCENDING), ('content_son.course', pymongo.ASCENDING), ('uploadDate', pymongo.ASCENDING)],
+            sparse=True
+        )
+        self.fs_files.create_index(
+            [('content_son.org', pymongo.ASCENDING), ('content_son.course', pymongo.ASCENDING), ('display_name', pymongo.ASCENDING)],
+            sparse=True
+        )
 
 
 def query_for_course(course_key, category=None):

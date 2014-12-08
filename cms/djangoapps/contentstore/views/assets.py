@@ -26,7 +26,7 @@ from util.json_request import JsonResponse
 from django.http import HttpResponseNotFound
 from django.utils.translation import ugettext as _
 from pymongo import ASCENDING, DESCENDING
-from .access import has_course_access
+from student.auth import has_course_author_access
 from xmodule.modulestore.exceptions import ItemNotFoundError
 
 __all__ = ['assets_handler']
@@ -57,7 +57,7 @@ def assets_handler(request, course_key_string=None, asset_key_string=None):
         json: delete an asset
     """
     course_key = CourseKey.from_string(course_key_string)
-    if not has_course_access(request.user, course_key):
+    if not has_course_author_access(request.user, course_key):
         raise PermissionDenied()
 
     response_format = request.REQUEST.get('format', 'html')
@@ -121,8 +121,7 @@ def _assets_json(request, course_key):
 
     asset_json = []
     for asset in assets:
-        asset_id = asset.get('content_son', asset['_id'])
-        asset_location = StaticContent.compute_location(course_key, asset_id['name'])
+        asset_location = asset['asset_key']
         # note, due to the schema change we may not have a 'thumbnail_location' in the result set
         thumbnail_location = asset.get('thumbnail_location', None)
         if thumbnail_location:
@@ -191,8 +190,8 @@ def _upload_asset(request, course_key):
 
     # first let's see if a thumbnail can be created
     (thumbnail_content, thumbnail_location) = contentstore().generate_thumbnail(
-            content,
-            tempfile_path=tempfile_path
+        content,
+        tempfile_path=tempfile_path,
     )
 
     # delete cached thumbnail even if one couldn't be created this time (else
@@ -278,7 +277,7 @@ def _get_asset_json(display_name, date, location, thumbnail_location, locked):
     """
     Helper method for formatting the asset information to send to client.
     """
-    asset_url = location.to_deprecated_string()
+    asset_url = StaticContent.serialize_asset_key_with_slash(location)
     external_url = settings.LMS_BASE + asset_url
     return {
         'display_name': display_name,
@@ -286,7 +285,7 @@ def _get_asset_json(display_name, date, location, thumbnail_location, locked):
         'url': asset_url,
         'external_url': external_url,
         'portable_url': StaticContent.get_static_path_from_location(location),
-        'thumbnail': thumbnail_location.to_deprecated_string() if thumbnail_location is not None else None,
+        'thumbnail': StaticContent.serialize_asset_key_with_slash(thumbnail_location) if thumbnail_location else None,
         'locked': locked,
         # Needed for Backbone delete/update.
         'id': unicode(location)

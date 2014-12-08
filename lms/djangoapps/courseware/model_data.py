@@ -21,6 +21,7 @@ from django.contrib.auth.models import User
 from xblock.runtime import KeyValueStore
 from xblock.exceptions import KeyValueMultiSaveError, InvalidScopeError
 from xblock.fields import Scope, UserScope
+from xmodule.modulestore.django import modulestore
 
 log = logging.getLogger(__name__)
 
@@ -109,7 +110,8 @@ class FieldDataCache(object):
 
             return descriptors
 
-        descriptors = get_child_descriptors(descriptor, depth, descriptor_filter)
+        with modulestore().bulk_operations(descriptor.location.course_key):
+            descriptors = get_child_descriptors(descriptor, depth, descriptor_filter)
 
         return FieldDataCache(descriptors, course_id, user, select_for_update)
 
@@ -242,7 +244,7 @@ class FieldDataCache(object):
             assert(isinstance(key.block_scope_id, UsageKey))
             field_object, _ = StudentModule.objects.get_or_create(
                 course_id=self.course_id,
-                student=User.objects.get(id=key.user_id),
+                student_id=key.user_id,
                 module_state_key=key.block_scope_id,
                 defaults={
                     'state': json.dumps({}),
@@ -258,12 +260,12 @@ class FieldDataCache(object):
             field_object, _ = XModuleStudentPrefsField.objects.get_or_create(
                 field_name=key.field_name,
                 module_type=key.block_scope_id,
-                student=User.objects.get(id=key.user_id),
+                student_id=key.user_id,
             )
         elif key.scope == Scope.user_info:
             field_object, _ = XModuleStudentInfoField.objects.get_or_create(
                 field_name=key.field_name,
-                student=User.objects.get(id=key.user_id),
+                student_id=key.user_id,
             )
 
         cache_key = self._cache_key_from_kvs_key(key)

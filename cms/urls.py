@@ -73,8 +73,8 @@ urlpatterns += patterns(
         'course_info_update_handler'
     ),
     url(r'^course/{}?$'.format(settings.COURSE_KEY_PATTERN), 'course_handler', name='course_handler'),
-    url(r'^subsection/{}$'.format(settings.USAGE_KEY_PATTERN), 'subsection_handler'),
-    url(r'^unit/{}$'.format(settings.USAGE_KEY_PATTERN), 'unit_handler'),
+    url(r'^course_notifications/{}/(?P<action_state_id>\d+)?$'.format(settings.COURSE_KEY_PATTERN), 'course_notifications_handler'),
+    url(r'^course_rerun/{}$'.format(settings.COURSE_KEY_PATTERN), 'course_rerun_handler', name='course_rerun_handler'),
     url(r'^container/{}$'.format(settings.USAGE_KEY_PATTERN), 'container_handler'),
     url(r'^checklists/{}/(?P<checklist_index>\d+)?$'.format(settings.COURSE_KEY_PATTERN), 'checklists_handler'),
     url(r'^orphan/{}$'.format(settings.COURSE_KEY_PATTERN), 'orphan_handler'),
@@ -82,6 +82,7 @@ urlpatterns += patterns(
     url(r'^import/{}$'.format(settings.COURSE_KEY_PATTERN), 'import_handler'),
     url(r'^import_status/{}/(?P<filename>.+)$'.format(settings.COURSE_KEY_PATTERN), 'import_status_handler'),
     url(r'^export/{}$'.format(settings.COURSE_KEY_PATTERN), 'export_handler'),
+    url(r'^xblock/outline/{}$'.format(settings.USAGE_KEY_PATTERN), 'xblock_outline_handler'),
     url(r'^xblock/{}/(?P<view_name>[^/]+)$'.format(settings.USAGE_KEY_PATTERN), 'xblock_view_handler'),
     url(r'^xblock/{}?$'.format(settings.USAGE_KEY_PATTERN), 'xblock_handler'),
     url(r'^tabs/{}$'.format(settings.COURSE_KEY_PATTERN), 'tabs_handler'),
@@ -90,11 +91,12 @@ urlpatterns += patterns(
     url(r'^settings/advanced/{}$'.format(settings.COURSE_KEY_PATTERN), 'advanced_settings_handler'),
     url(r'^textbooks/{}$'.format(settings.COURSE_KEY_PATTERN), 'textbooks_list_handler'),
     url(r'^textbooks/{}/(?P<textbook_id>\d[^/]*)$'.format(settings.COURSE_KEY_PATTERN), 'textbooks_detail_handler'),
-)
+    url(r'^group_configurations/{}$'.format(settings.COURSE_KEY_PATTERN), 'group_configurations_list_handler'),
+    url(r'^group_configurations/{}/(?P<group_configuration_id>\d+)/?$'.format(settings.COURSE_KEY_PATTERN),
+        'group_configurations_detail_handler'),
 
-if settings.FEATURES.get('ENABLE_GROUP_CONFIGURATIONS'):
-    urlpatterns += (url(r'^group_configurations/(?P<course_key_string>[^/]+)$',
-                        'contentstore.views.group_configurations_list_handler'),)
+    url(r'^api/val/v0/', include('edxval.urls')),
+)
 
 js_info_dict = {
     'domain': 'djangojs',
@@ -102,18 +104,25 @@ js_info_dict = {
     'packages': ('openassessment',),
 }
 
-urlpatterns += patterns('',
+urlpatterns += patterns(
+    '',
     # Serve catalog of localized strings to be rendered by Javascript
     url(r'^i18n.js$', 'django.views.i18n.javascript_catalog', js_info_dict),
 )
 
 
 if settings.FEATURES.get('ENABLE_EXPORT_GIT'):
-    urlpatterns += (url(r'^export_git/{}$'.format(settings.COURSE_KEY_PATTERN),
-                        'contentstore.views.export_git', name='export_git'),)
+    urlpatterns += (url(
+        r'^export_git/{}$'.format(
+            settings.COURSE_KEY_PATTERN,
+        ),
+        'contentstore.views.export_git',
+        name='export_git',
+    ),)
 
 if settings.FEATURES.get('ENABLE_SERVICE_STATUS'):
-    urlpatterns += patterns('',
+    urlpatterns += patterns(
+        '',
         url(r'^status/', include('service_status.urls')),
     )
 
@@ -139,7 +148,7 @@ if settings.DEBUG:
         pass
 
 # Custom error pages
-# pylint: disable=C0103
+# pylint: disable=invalid-name
 handler404 = 'contentstore.views.render_404'
 handler500 = 'contentstore.views.render_500'
 

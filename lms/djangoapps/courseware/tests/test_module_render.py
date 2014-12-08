@@ -1,54 +1,69 @@
 """
 Test for lms courseware app, module render unit
 """
-from ddt import ddt, data
 from functools import partial
-from mock import MagicMock, patch, Mock
 import json
 
+import ddt
 from django.http import Http404, HttpResponse
 from django.core.urlresolvers import reverse
 from django.conf import settings
-from django.test import TestCase
 from django.test.client import RequestFactory
 from django.test.utils import override_settings
 from django.contrib.auth.models import AnonymousUser
-
-from capa.tests.response_xml_factory import OptionResponseXMLFactory
+from mock import MagicMock, patch, Mock
+from opaque_keys.edx.locations import SlashSeparatedCourseKey
 from xblock.field_data import FieldData
 from xblock.runtime import Runtime
 from xblock.fields import ScopeIds
-from xmodule.lti_module import LTIDescriptor
-from xmodule.modulestore.django import modulestore
-from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
-from xmodule.modulestore.tests.factories import ItemFactory, CourseFactory
-from xmodule.x_module import XModuleDescriptor, STUDENT_VIEW
-from opaque_keys.edx.locations import SlashSeparatedCourseKey
+from xblock.core import XBlock
 
+from capa.tests.response_xml_factory import OptionResponseXMLFactory
 from courseware import module_render as render
 from courseware.courses import get_course_with_access, course_image_url, get_course_info_section
 from courseware.model_data import FieldDataCache
 from courseware.models import StudentModule
 from courseware.tests.factories import StudentModuleFactory, UserFactory, GlobalStaffFactory
 from courseware.tests.tests import LoginEnrollmentTestCase
-
-from courseware.tests.modulestore_config import TEST_DATA_MIXED_MODULESTORE
-from courseware.tests.modulestore_config import TEST_DATA_MONGO_MODULESTORE
-from courseware.tests.modulestore_config import TEST_DATA_XML_MODULESTORE
+from xmodule.modulestore.tests.django_utils import (
+    TEST_DATA_MOCK_MODULESTORE, TEST_DATA_MIXED_TOY_MODULESTORE,
+    TEST_DATA_XML_MODULESTORE
+)
 from courseware.tests.test_submitting_problems import TestSubmittingProblems
-
-from student.models import anonymous_id_for_user
 from lms.lib.xblock.runtime import quote_slashes
+from student.models import anonymous_id_for_user
+from xmodule.lti_module import LTIDescriptor
+from xmodule.modulestore import ModuleStoreEnum
+from xmodule.modulestore.django import modulestore
+from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
+from xmodule.modulestore.tests.factories import ItemFactory, CourseFactory, check_mongo_calls
+from xmodule.x_module import XModuleDescriptor, STUDENT_VIEW
+
+TEST_DATA_DIR = settings.COMMON_TEST_DATA_ROOT
 
 
-@override_settings(MODULESTORE=TEST_DATA_MIXED_MODULESTORE)
+class PureXBlock(XBlock):
+    """
+    Pure XBlock to use in tests.
+    """
+    pass
+
+
+@ddt.ddt
+@override_settings(MODULESTORE=TEST_DATA_MOCK_MODULESTORE)
 class ModuleRenderTestCase(ModuleStoreTestCase, LoginEnrollmentTestCase):
     """
     Tests of courseware.module_render
     """
+    # TODO: this test relies on the specific setup of the toy course.
+    # It should be rewritten to build the course it needs and then test that.
     def setUp(self):
-        self.course_key = SlashSeparatedCourseKey('edX', 'toy', '2012_Fall')
-        self.location = self.course_key.make_usage_key('chapter', 'Overview')
+        """
+        Set up the course and user context
+        """
+        super(ModuleRenderTestCase, self).setUp()
+
+        self.course_key = self.create_toy_course()
         self.toy_course = modulestore().get_course(self.course_key)
         self.mock_user = UserFactory()
         self.mock_user.id = 1
@@ -68,7 +83,7 @@ class ModuleRenderTestCase(ModuleStoreTestCase, LoginEnrollmentTestCase):
     def test_get_module(self):
         self.assertEqual(
             None,
-            render.get_module('dummyuser', None, 'invalid location', None, None)
+            render.get_module('dummyuser', None, 'invalid location', None)
         )
 
     def test_module_render_with_jump_to_id(self):
@@ -90,7 +105,6 @@ class ModuleRenderTestCase(ModuleStoreTestCase, LoginEnrollmentTestCase):
             mock_request,
             self.course_key.make_usage_key('html', 'toyjumpto'),
             field_data_cache,
-            self.course_key
         )
 
         # get the rendered HTML output which should have the rewritten link
@@ -162,15 +176,28 @@ class ModuleRenderTestCase(ModuleStoreTestCase, LoginEnrollmentTestCase):
         self.assertEquals(403, response.status_code)
         self.assertEquals('Unauthenticated', response.content)
 
+    @ddt.data('pure', 'vertical')
+    @XBlock.register_temp_plugin(PureXBlock, identifier='pure')
+    def test_rebinding_same_user(self, block_type):
+        request = self.request_factory.get('')
+        request.user = self.mock_user
+        course = CourseFactory()
+        descriptor = ItemFactory(category=block_type, parent=course)
+        field_data_cache = FieldDataCache([self.toy_course, descriptor], self.toy_course.id, self.mock_user)
+        render.get_module_for_descriptor(self.mock_user, request, descriptor, field_data_cache, self.toy_course.id)
+        render.get_module_for_descriptor(self.mock_user, request, descriptor, field_data_cache, self.toy_course.id)
 
-@override_settings(MODULESTORE=TEST_DATA_MIXED_MODULESTORE)
+
+@override_settings(MODULESTORE=TEST_DATA_MOCK_MODULESTORE)
 class TestHandleXBlockCallback(ModuleStoreTestCase, LoginEnrollmentTestCase):
     """
     Test the handle_xblock_callback function
     """
 
     def setUp(self):
-        self.course_key = SlashSeparatedCourseKey('edX', 'toy', '2012_Fall')
+        super(TestHandleXBlockCallback, self).setUp()
+
+        self.course_key = self.create_toy_course()
         self.location = self.course_key.make_usage_key('chapter', 'Overview')
         self.toy_course = modulestore().get_course(self.course_key)
         self.mock_user = UserFactory()
@@ -315,73 +342,102 @@ class TestHandleXBlockCallback(ModuleStoreTestCase, LoginEnrollmentTestCase):
             )
 
 
-@override_settings(MODULESTORE=TEST_DATA_MIXED_MODULESTORE)
-class TestTOC(TestCase):
+@ddt.ddt
+@override_settings(MODULESTORE=TEST_DATA_MOCK_MODULESTORE)
+class TestTOC(ModuleStoreTestCase):
     """Check the Table of Contents for a course"""
-    def setUp(self):
-
-        # Toy courses should be loaded
-        self.course_key = SlashSeparatedCourseKey('edX', 'toy', '2012_Fall')
-        self.toy_course = modulestore().get_course(self.course_key)
-        self.portal_user = UserFactory()
-
-    def test_toc_toy_from_chapter(self):
-        chapter = 'Overview'
-        chapter_url = '%s/%s/%s' % ('/courses', self.course_key, chapter)
+    def setup_modulestore(self, default_ms, num_finds, num_sends):
+        self.course_key = self.create_toy_course()
+        self.chapter = 'Overview'
+        chapter_url = '%s/%s/%s' % ('/courses', self.course_key, self.chapter)
         factory = RequestFactory()
-        request = factory.get(chapter_url)
-        field_data_cache = FieldDataCache.cache_for_descriptor_descendents(
-            self.toy_course.id, self.portal_user, self.toy_course, depth=2)
+        self.request = factory.get(chapter_url)
+        self.request.user = UserFactory()
+        self.modulestore = self.store._get_modulestore_for_courseid(self.course_key)
+        with self.modulestore.bulk_operations(self.course_key):
+            with check_mongo_calls(num_finds, num_sends):
+                self.toy_course = self.store.get_course(self.toy_loc, depth=2)
+                self.field_data_cache = FieldDataCache.cache_for_descriptor_descendents(
+                    self.toy_loc, self.request.user, self.toy_course, depth=2
+                )
 
-        expected = ([{'active': True, 'sections':
-                      [{'url_name': 'Toy_Videos', 'display_name': u'Toy Videos', 'graded': True,
-                        'format': u'Lecture Sequence', 'due': None, 'active': False},
-                       {'url_name': 'Welcome', 'display_name': u'Welcome', 'graded': True,
-                        'format': '', 'due': None, 'active': False},
-                       {'url_name': 'video_123456789012', 'display_name': 'Test Video', 'graded': True,
-                        'format': '', 'due': None, 'active': False},
-                       {'url_name': 'video_4f66f493ac8f', 'display_name': 'Video', 'graded': True,
-                        'format': '', 'due': None, 'active': False}],
-                      'url_name': 'Overview', 'display_name': u'Overview'},
-                     {'active': False, 'sections':
-                      [{'url_name': 'toyvideo', 'display_name': 'toyvideo', 'graded': True,
-                        'format': '', 'due': None, 'active': False}],
-                      'url_name': 'secret:magic', 'display_name': 'secret:magic'}])
+    # Mongo makes 3 queries to load the course to depth 2:
+    #     - 1 for the course
+    #     - 1 for its children
+    #     - 1 for its grandchildren
+    # Split makes 6 queries to load the course to depth 2:
+    #     - load the structure
+    #     - load 5 definitions
+    # Split makes 2 queries to render the toc:
+    #     - it loads the active version at the start of the bulk operation
+    #     - it loads the course definition for inheritance, because it's outside
+    #     the bulk-operation marker that loaded the course descriptor
+    @ddt.data((ModuleStoreEnum.Type.mongo, 3, 0, 0), (ModuleStoreEnum.Type.split, 6, 0, 2))
+    @ddt.unpack
+    def test_toc_toy_from_chapter(self, default_ms, setup_finds, setup_sends, toc_finds):
+        with self.store.default_store(default_ms):
+            self.setup_modulestore(default_ms, setup_finds, setup_sends)
+            expected = ([{'active': True, 'sections':
+                          [{'url_name': 'Toy_Videos', 'display_name': u'Toy Videos', 'graded': True,
+                            'format': u'Lecture Sequence', 'due': None, 'active': False},
+                           {'url_name': 'Welcome', 'display_name': u'Welcome', 'graded': True,
+                            'format': '', 'due': None, 'active': False},
+                           {'url_name': 'video_123456789012', 'display_name': 'Test Video', 'graded': True,
+                            'format': '', 'due': None, 'active': False},
+                           {'url_name': 'video_4f66f493ac8f', 'display_name': 'Video', 'graded': True,
+                            'format': '', 'due': None, 'active': False}],
+                          'url_name': 'Overview', 'display_name': u'Overview'},
+                         {'active': False, 'sections':
+                          [{'url_name': 'toyvideo', 'display_name': 'toyvideo', 'graded': True,
+                            'format': '', 'due': None, 'active': False}],
+                          'url_name': 'secret:magic', 'display_name': 'secret:magic'}])
 
-        actual = render.toc_for_course(self.portal_user, request, self.toy_course, chapter, None, field_data_cache)
+            with check_mongo_calls(toc_finds):
+                actual = render.toc_for_course(
+                    self.request.user, self.request, self.toy_course, self.chapter, None, self.field_data_cache
+                )
         for toc_section in expected:
             self.assertIn(toc_section, actual)
 
-    def test_toc_toy_from_section(self):
-        chapter = 'Overview'
-        chapter_url = '%s/%s/%s' % ('/courses', self.course_key, chapter)
-        section = 'Welcome'
-        factory = RequestFactory()
-        request = factory.get(chapter_url)
-        field_data_cache = FieldDataCache.cache_for_descriptor_descendents(
-            self.toy_course.id, self.portal_user, self.toy_course, depth=2)
+    # Mongo makes 3 queries to load the course to depth 2:
+    #     - 1 for the course
+    #     - 1 for its children
+    #     - 1 for its grandchildren
+    # Split makes 6 queries to load the course to depth 2:
+    #     - load the structure
+    #     - load 5 definitions
+    # Split makes 2 queries to render the toc:
+    #     - it loads the active version at the start of the bulk operation
+    #     - it loads the course definition for inheritance, because it's outside
+    #     the bulk-operation marker that loaded the course descriptor
+    @ddt.data((ModuleStoreEnum.Type.mongo, 3, 0, 0), (ModuleStoreEnum.Type.split, 6, 0, 2))
+    @ddt.unpack
+    def test_toc_toy_from_section(self, default_ms, setup_finds, setup_sends, toc_finds):
+        with self.store.default_store(default_ms):
+            self.setup_modulestore(default_ms, setup_finds, setup_sends)
+            section = 'Welcome'
+            expected = ([{'active': True, 'sections':
+                          [{'url_name': 'Toy_Videos', 'display_name': u'Toy Videos', 'graded': True,
+                            'format': u'Lecture Sequence', 'due': None, 'active': False},
+                           {'url_name': 'Welcome', 'display_name': u'Welcome', 'graded': True,
+                            'format': '', 'due': None, 'active': True},
+                           {'url_name': 'video_123456789012', 'display_name': 'Test Video', 'graded': True,
+                            'format': '', 'due': None, 'active': False},
+                           {'url_name': 'video_4f66f493ac8f', 'display_name': 'Video', 'graded': True,
+                            'format': '', 'due': None, 'active': False}],
+                          'url_name': 'Overview', 'display_name': u'Overview'},
+                         {'active': False, 'sections':
+                          [{'url_name': 'toyvideo', 'display_name': 'toyvideo', 'graded': True,
+                            'format': '', 'due': None, 'active': False}],
+                          'url_name': 'secret:magic', 'display_name': 'secret:magic'}])
 
-        expected = ([{'active': True, 'sections':
-                      [{'url_name': 'Toy_Videos', 'display_name': u'Toy Videos', 'graded': True,
-                        'format': u'Lecture Sequence', 'due': None, 'active': False},
-                       {'url_name': 'Welcome', 'display_name': u'Welcome', 'graded': True,
-                        'format': '', 'due': None, 'active': True},
-                       {'url_name': 'video_123456789012', 'display_name': 'Test Video', 'graded': True,
-                        'format': '', 'due': None, 'active': False},
-                       {'url_name': 'video_4f66f493ac8f', 'display_name': 'Video', 'graded': True,
-                        'format': '', 'due': None, 'active': False}],
-                      'url_name': 'Overview', 'display_name': u'Overview'},
-                     {'active': False, 'sections':
-                      [{'url_name': 'toyvideo', 'display_name': 'toyvideo', 'graded': True,
-                        'format': '', 'due': None, 'active': False}],
-                      'url_name': 'secret:magic', 'display_name': 'secret:magic'}])
-
-        actual = render.toc_for_course(self.portal_user, request, self.toy_course, chapter, section, field_data_cache)
-        for toc_section in expected:
-            self.assertIn(toc_section, actual)
+            with check_mongo_calls(toc_finds):
+                actual = render.toc_for_course(self.request.user, self.request, self.toy_course, self.chapter, section, self.field_data_cache)
+            for toc_section in expected:
+                self.assertIn(toc_section, actual)
 
 
-@override_settings(MODULESTORE=TEST_DATA_MIXED_MODULESTORE)
+@override_settings(MODULESTORE=TEST_DATA_MOCK_MODULESTORE)
 class TestHtmlModifiers(ModuleStoreTestCase):
     """
     Tests to verify that standard modifications to the output of XModule/XBlock
@@ -414,7 +470,6 @@ class TestHtmlModifiers(ModuleStoreTestCase):
             self.request,
             self.location,
             self.field_data_cache,
-            self.course.id,
             wrap_xmodule_display=True,
         )
         result_fragment = module.render(STUDENT_VIEW)
@@ -427,7 +482,6 @@ class TestHtmlModifiers(ModuleStoreTestCase):
             self.request,
             self.location,
             self.field_data_cache,
-            self.course.id,
             wrap_xmodule_display=False,
         )
         result_fragment = module.render(STUDENT_VIEW)
@@ -440,7 +494,6 @@ class TestHtmlModifiers(ModuleStoreTestCase):
             self.request,
             self.location,
             self.field_data_cache,
-            self.course.id,
         )
         result_fragment = module.render(STUDENT_VIEW)
 
@@ -458,7 +511,6 @@ class TestHtmlModifiers(ModuleStoreTestCase):
             self.request,
             self.location,
             self.field_data_cache,
-            self.course.id,
         )
         result_fragment = module.render(STUDENT_VIEW)
 
@@ -481,7 +533,6 @@ class TestHtmlModifiers(ModuleStoreTestCase):
             self.request,
             self.location,
             self.field_data_cache,
-            self.course.id,
             static_asset_path="toy_course_dir",
         )
         result_fragment = module.render(STUDENT_VIEW)
@@ -508,7 +559,6 @@ class TestHtmlModifiers(ModuleStoreTestCase):
             self.request,
             self.location,
             self.field_data_cache,
-            self.course.id,
         )
         result_fragment = module.render(STUDENT_VIEW)
 
@@ -546,7 +596,6 @@ class ViewInStudioTest(ModuleStoreTestCase):
             self.request,
             location,
             field_data_cache,
-            course_id,
         )
 
     def setup_mongo_course(self, course_edit_method='Studio'):
@@ -557,6 +606,7 @@ class ViewInStudioTest(ModuleStoreTestCase):
 
         descriptor = ItemFactory.create(
             category='vertical',
+            parent_location=course.location,
         )
 
         child_descriptor = ItemFactory.create(
@@ -566,7 +616,7 @@ class ViewInStudioTest(ModuleStoreTestCase):
 
         self.module = self._get_module(course.id, descriptor, descriptor.location)
 
-        # pylint: disable=W0201
+        # pylint: disable=attribute-defined-outside-init
         self.child_module = self._get_module(course.id, child_descriptor, child_descriptor.location)
 
     def setup_xml_course(self):
@@ -581,7 +631,7 @@ class ViewInStudioTest(ModuleStoreTestCase):
         self.module = self._get_module(course_key, descriptor, location)
 
 
-@override_settings(MODULESTORE=TEST_DATA_MONGO_MODULESTORE)
+@override_settings(MODULESTORE=TEST_DATA_MOCK_MODULESTORE)
 class MongoViewInStudioTest(ViewInStudioTest):
     """Test the 'View in Studio' link visibility in a mongo backed course."""
 
@@ -613,7 +663,7 @@ class MongoViewInStudioTest(ViewInStudioTest):
         self.assertNotIn('View Unit in Studio', result_fragment.content)
 
 
-@override_settings(MODULESTORE=TEST_DATA_MIXED_MODULESTORE)
+@override_settings(MODULESTORE=TEST_DATA_MIXED_TOY_MODULESTORE)
 class MixedViewInStudioTest(ViewInStudioTest):
     """Test the 'View in Studio' link visibility in a mixed mongo backed course."""
 
@@ -653,7 +703,7 @@ class XmlViewInStudioTest(ViewInStudioTest):
         self.assertNotIn('View Unit in Studio', result_fragment.content)
 
 
-@override_settings(MODULESTORE=TEST_DATA_MIXED_MODULESTORE)
+@override_settings(MODULESTORE=TEST_DATA_MOCK_MODULESTORE)
 @patch.dict('django.conf.settings.FEATURES', {'DISPLAY_DEBUG_INFO_TO_STAFF': True, 'DISPLAY_HISTOGRAMS_TO_STAFF': True})
 @patch('courseware.module_render.has_access', Mock(return_value=True))
 class TestStaffDebugInfo(ModuleStoreTestCase):
@@ -693,7 +743,6 @@ class TestStaffDebugInfo(ModuleStoreTestCase):
             self.request,
             self.location,
             self.field_data_cache,
-            self.course.id,
         )
         result_fragment = module.render(STUDENT_VIEW)
         self.assertNotIn('Staff Debug', result_fragment.content)
@@ -704,7 +753,6 @@ class TestStaffDebugInfo(ModuleStoreTestCase):
             self.request,
             self.location,
             self.field_data_cache,
-            self.course.id,
         )
         result_fragment = module.render(STUDENT_VIEW)
         self.assertIn('Staff Debug', result_fragment.content)
@@ -716,7 +764,6 @@ class TestStaffDebugInfo(ModuleStoreTestCase):
             self.request,
             self.location,
             self.field_data_cache,
-            self.course.id,
         )
         result_fragment = module.render(STUDENT_VIEW)
         self.assertNotIn('histrogram', result_fragment.content)
@@ -740,7 +787,6 @@ class TestStaffDebugInfo(ModuleStoreTestCase):
                 self.request,
                 html_descriptor.location,
                 field_data_cache,
-                self.course.id,
             )
             module.render(STUDENT_VIEW)
             self.assertFalse(mock_grade_histogram.called)
@@ -763,7 +809,6 @@ class TestStaffDebugInfo(ModuleStoreTestCase):
                 self.request,
                 self.location,
                 self.field_data_cache,
-                self.course.id,
             )
             module.render(STUDENT_VIEW)
             self.assertTrue(mock_grade_histogram.called)
@@ -778,8 +823,8 @@ PER_STUDENT_ANONYMIZED_DESCRIPTORS = set(
 )
 
 
-@ddt
-@override_settings(MODULESTORE=TEST_DATA_MIXED_MODULESTORE)
+@ddt.ddt
+@override_settings(MODULESTORE=TEST_DATA_MOCK_MODULESTORE)
 class TestAnonymousStudentId(ModuleStoreTestCase, LoginEnrollmentTestCase):
     """
     Test that anonymous_student_id is set correctly across a variety of XBlock types
@@ -810,15 +855,16 @@ class TestAnonymousStudentId(ModuleStoreTestCase, LoginEnrollmentTestCase):
             descriptor.module_class = xblock_class.module_class
 
         return render.get_module_for_descriptor_internal(
-            self.user,
-            descriptor,
-            Mock(spec=FieldDataCache),
-            course_id,
-            Mock(),  # Track Function
-            Mock(),  # XQueue Callback Url Prefix
+            user=self.user,
+            descriptor=descriptor,
+            field_data_cache=Mock(spec=FieldDataCache),
+            course_id=course_id,
+            track_function=Mock(),  # Track Function
+            xqueue_callback_url_prefix=Mock(),  # XQueue Callback Url Prefix
+            request_token='request_token',
         ).xmodule_runtime.anonymous_student_id
 
-    @data(*PER_STUDENT_ANONYMIZED_DESCRIPTORS)
+    @ddt.data(*PER_STUDENT_ANONYMIZED_DESCRIPTORS)
     def test_per_student_anonymized_id(self, descriptor_class):
         for course_id in ('MITx/6.00x/2012_Fall', 'MITx/6.00x/2013_Spring'):
             self.assertEquals(
@@ -828,7 +874,7 @@ class TestAnonymousStudentId(ModuleStoreTestCase, LoginEnrollmentTestCase):
                 self._get_anonymous_id(SlashSeparatedCourseKey.from_deprecated_string(course_id), descriptor_class)
             )
 
-    @data(*PER_COURSE_ANONYMIZED_DESCRIPTORS)
+    @ddt.data(*PER_COURSE_ANONYMIZED_DESCRIPTORS)
     def test_per_course_anonymized_id(self, descriptor_class):
         self.assertEquals(
             # This value is set by observation, so that later changes to the student
@@ -845,7 +891,7 @@ class TestAnonymousStudentId(ModuleStoreTestCase, LoginEnrollmentTestCase):
         )
 
 
-@override_settings(MODULESTORE=TEST_DATA_MIXED_MODULESTORE)
+@override_settings(MODULESTORE=TEST_DATA_MOCK_MODULESTORE)
 @patch('track.views.tracker')
 class TestModuleTrackingContext(ModuleStoreTestCase):
     """
@@ -929,7 +975,6 @@ class TestXmoduleRuntimeEvent(TestSubmittingProblems):
             mock_request,
             self.problem.location,
             field_data_cache,
-            self.course.id
         )._xmodule
 
     def set_module_grade_using_publish(self, grade_dict):
@@ -978,7 +1023,7 @@ class TestRebindModule(TestSubmittingProblems):
             mock_request,
             self.lti.location,
             field_data_cache,
-            self.course.id)._xmodule
+        )._xmodule
 
     def test_rebind_noauth_module_to_user_not_anonymous(self):
         """
@@ -1007,3 +1052,14 @@ class TestRebindModule(TestSubmittingProblems):
         self.assertEqual(module.system.anonymous_student_id, anonymous_id_for_user(user2, self.course.id))
         self.assertEqual(module.scope_ids.user_id, user2.id)
         self.assertEqual(module.descriptor.scope_ids.user_id, user2.id)
+
+    @patch('courseware.module_render.make_psychometrics_data_update_handler')
+    @patch.dict(settings.FEATURES, {'ENABLE_PSYCHOMETRICS': True})
+    def test_psychometrics_anonymous(self, psycho_handler):
+        """
+        Make sure that noauth modules with anonymous users don't have
+        the psychometrics callback bound.
+        """
+        module = self.get_module_for_user(self.anon_user)
+        module.system.rebind_noauth_module_to_user(module, self.anon_user)
+        self.assertFalse(psycho_handler.called)

@@ -4,7 +4,7 @@ This is the default template for our main set of AWS servers.
 
 # We intentionally define lots of variables that aren't used, and
 # want to import all variables from base settings files
-# pylint: disable=W0401, W0614
+# pylint: disable=wildcard-import, unused-wildcard-import
 
 import json
 
@@ -133,6 +133,7 @@ if 'loc_cache' not in CACHES:
 
 SESSION_COOKIE_DOMAIN = ENV_TOKENS.get('SESSION_COOKIE_DOMAIN')
 SESSION_ENGINE = ENV_TOKENS.get('SESSION_ENGINE', SESSION_ENGINE)
+SESSION_COOKIE_SECURE = ENV_TOKENS.get('SESSION_COOKIE_SECURE', SESSION_COOKIE_SECURE)
 
 # allow for environments to specify what cookie name our login subsystem should use
 # this is to fix a bug regarding simultaneous logins between edx.org and edge.edx.org which can
@@ -150,6 +151,8 @@ MKTG_URLS = ENV_TOKENS.get('MKTG_URLS', MKTG_URLS)
 TECH_SUPPORT_EMAIL = ENV_TOKENS.get('TECH_SUPPORT_EMAIL', TECH_SUPPORT_EMAIL)
 
 COURSES_WITH_UNSAFE_CODE = ENV_TOKENS.get("COURSES_WITH_UNSAFE_CODE", [])
+
+ASSET_IGNORE_REGEX = ENV_TOKENS.get('ASSET_IGNORE_REGEX', ASSET_IGNORE_REGEX)
 
 # Theme overrides
 THEME_NAME = ENV_TOKENS.get('THEME_NAME', None)
@@ -177,7 +180,6 @@ WIKI_ENABLED = ENV_TOKENS.get('WIKI_ENABLED', WIKI_ENABLED)
 
 LOGGING = get_logger_config(LOG_DIR,
                             logging_env=ENV_TOKENS['LOGGING_ENV'],
-                            syslog_addr=(ENV_TOKENS['SYSLOG_SERVER'], 514),
                             debug=False,
                             service_variant=SERVICE_VARIANT)
 
@@ -212,6 +214,10 @@ if FEATURES.get('AUTH_USE_CAS'):
 with open(CONFIG_ROOT / CONFIG_PREFIX + "auth.json") as auth_file:
     AUTH_TOKENS = json.load(auth_file)
 
+############### XBlock filesystem field config ##########
+if 'DJFS' in AUTH_TOKENS and AUTH_TOKENS['DJFS'] is not None:
+    DJFS = AUTH_TOKENS['DJFS']
+
 EMAIL_HOST_USER = AUTH_TOKENS.get('EMAIL_HOST_USER', EMAIL_HOST_USER)
 EMAIL_HOST_PASSWORD = AUTH_TOKENS.get('EMAIL_HOST_PASSWORD', EMAIL_HOST_PASSWORD)
 
@@ -242,6 +248,7 @@ if 'DATADOG_API' in AUTH_TOKENS:
     DATADOG['api_key'] = AUTH_TOKENS['DATADOG_API']
 
 # Celery Broker
+CELERY_ALWAYS_EAGER = ENV_TOKENS.get("CELERY_ALWAYS_EAGER", False)
 CELERY_BROKER_TRANSPORT = ENV_TOKENS.get("CELERY_BROKER_TRANSPORT", "")
 CELERY_BROKER_HOSTNAME = ENV_TOKENS.get("CELERY_BROKER_HOSTNAME", "")
 CELERY_BROKER_VHOST = ENV_TOKENS.get("CELERY_BROKER_VHOST", "")
@@ -283,3 +290,11 @@ X_FRAME_OPTIONS = ENV_TOKENS.get('X_FRAME_OPTIONS', X_FRAME_OPTIONS)
 
 ##### ADVANCED_SECURITY_CONFIG #####
 ADVANCED_SECURITY_CONFIG = ENV_TOKENS.get('ADVANCED_SECURITY_CONFIG', {})
+
+################ ADVANCED COMPONENT/PROBLEM TYPES ###############
+
+ADVANCED_COMPONENT_TYPES = ENV_TOKENS.get('ADVANCED_COMPONENT_TYPES', ADVANCED_COMPONENT_TYPES)
+ADVANCED_PROBLEM_TYPES = ENV_TOKENS.get('ADVANCED_PROBLEM_TYPES', ADVANCED_PROBLEM_TYPES)
+DEPRECATED_ADVANCED_COMPONENT_TYPES = ENV_TOKENS.get(
+    'DEPRECATED_ADVANCED_COMPONENT_TYPES', DEPRECATED_ADVANCED_COMPONENT_TYPES
+)

@@ -3,10 +3,11 @@ Module implementing `xblock.runtime.Runtime` functionality for the LMS
 """
 
 import re
+import xblock.reference.plugins
 
 from django.core.urlresolvers import reverse
 from django.conf import settings
-from user_api import user_service
+from user_api.api import course_tag as user_course_tag_api
 from xmodule.modulestore.django import modulestore
 from xmodule.x_module import ModuleSystem
 from xmodule.partitions.partitions_service import PartitionService
@@ -143,7 +144,7 @@ class UserTagsService(object):
     the current course id and current user.
     """
 
-    COURSE_SCOPE = user_service.COURSE_SCOPE
+    COURSE_SCOPE = user_course_tag_api.COURSE_SCOPE
 
     def __init__(self, runtime):
         self.runtime = runtime
@@ -160,11 +161,13 @@ class UserTagsService(object):
             scope: the current scope of the runtime
             key: the key for the value we want
         """
-        if scope != user_service.COURSE_SCOPE:
+        if scope != user_course_tag_api.COURSE_SCOPE:
             raise ValueError("unexpected scope {0}".format(scope))
 
-        return user_service.get_course_tag(self._get_current_user(),
-                                           self.runtime.course_id, key)
+        return user_course_tag_api.get_course_tag(
+            self._get_current_user(),
+            self.runtime.course_id, key
+        )
 
     def set_tag(self, scope, key, value):
         """
@@ -174,11 +177,13 @@ class UserTagsService(object):
             key: the key that to the value to be set
             value: the value to set
         """
-        if scope != user_service.COURSE_SCOPE:
+        if scope != user_course_tag_api.COURSE_SCOPE:
             raise ValueError("unexpected scope {0}".format(scope))
 
-        return user_service.set_course_tag(self._get_current_user(),
-                                           self.runtime.course_id, key, value)
+        return user_course_tag_api.set_course_tag(
+            self._get_current_user(),
+            self.runtime.course_id, key, value
+        )
 
 
 class LmsModuleSystem(LmsHandlerUrls, ModuleSystem):  # pylint: disable=abstract-method
@@ -193,4 +198,5 @@ class LmsModuleSystem(LmsHandlerUrls, ModuleSystem):  # pylint: disable=abstract
             course_id=kwargs.get('course_id', None),
             track_function=kwargs.get('track_function', None),
         )
+        services['fs'] = xblock.reference.plugins.FSService()
         super(LmsModuleSystem, self).__init__(**kwargs)

@@ -3,7 +3,7 @@ Instructor Views
 """
 ## NOTE: This is the code for the legacy instructor dashboard
 ## We are no longer supporting this file or accepting changes into it.
-
+# pylint: skip-file
 from contextlib import contextmanager
 import csv
 import json
@@ -11,6 +11,7 @@ import logging
 import os
 import re
 import requests
+import urllib
 
 from collections import defaultdict, OrderedDict
 from markupsafe import escape
@@ -26,7 +27,7 @@ from django.core.urlresolvers import reverse
 from django.core.mail import send_mail
 from django.utils import timezone
 
-from xmodule_modifiers import wrap_xblock
+from xmodule_modifiers import wrap_xblock, request_token
 import xmodule.graders as xmgraders
 from xmodule.modulestore import ModuleStoreEnum
 from xmodule.modulestore.django import modulestore
@@ -51,7 +52,7 @@ from django_comment_common.models import (
 )
 from django_comment_client.utils import has_forum_access
 from instructor.offline_gradecalc import student_grades, offline_grades_available
-from instructor.views.tools import strip_if_string, bulk_email_is_enabled_for_course
+from instructor.views.tools import strip_if_string, bulk_email_is_enabled_for_course, add_block_ids
 from instructor_task.api import (
     get_running_instructor_tasks,
     get_instructor_task_history,
@@ -133,8 +134,8 @@ def instructor_dashboard(request, course_id):
             'header': ['Statistic', 'Value'],
             'title': _('Course Statistics At A Glance'),
         }
-        data = [['# Enrolled', enrollment_number]]
-        data += [['Date', timezone.now().isoformat()]]
+
+        data = [['Date', timezone.now().isoformat()]]
         data += compute_course_stats(course).items()
         if request.user.is_staff:
             for field in course.fields.values():
@@ -663,7 +664,7 @@ def instructor_dashboard(request, course_id):
         if problem_to_dump[-4:] == ".xml":
             problem_to_dump = problem_to_dump[:-4]
         try:
-            module_state_key = course_key.make_usage_key(block_type='problem', name=problem_to_dump)
+            module_state_key = course_key.make_usage_key_from_deprecated_string(problem_to_dump)
             smdat = StudentModule.objects.filter(
                 course_id=course_key,
                 module_state_key=module_state_key
@@ -859,7 +860,7 @@ def instructor_dashboard(request, course_id):
                 )
 
                 # Submit the task, so that the correct InstructorTask object gets created (for monitoring purposes)
-                submit_bulk_course_email(request, course_key, email.id)  # pylint: disable=E1101
+                submit_bulk_course_email(request, course_key, email.id)  # pylint: disable=no-member
 
             except Exception as err:  # pylint: disable=broad-except
                 # Catch any errors and deliver a message to the user
@@ -910,7 +911,7 @@ def instructor_dashboard(request, course_id):
         """
         url = settings.ANALYTICS_SERVER_URL + \
             u"get?aname={}&course_id={}&apikey={}".format(
-                analytics_name, course_key.to_deprecated_string(), settings.ANALYTICS_API_KEY
+                analytics_name, urllib.quote(unicode(course_key)), settings.ANALYTICS_API_KEY
             )
         try:
             res = requests.get(url)
@@ -921,7 +922,9 @@ def instructor_dashboard(request, course_id):
         if res.status_code == codes.OK:
             # WARNING: do not use req.json because the preloaded json doesn't
             # preserve the order of the original record (hence OrderedDict).
-            return json.loads(res.content, object_pairs_hook=OrderedDict)
+            payload = json.loads(res.content, object_pairs_hook=OrderedDict)
+            add_block_ids(payload)
+            return payload
         else:
             log.error("Error fetching %s, code: %s, msg: %s",
                       url, res.status_code, res.content)
@@ -935,11 +938,10 @@ def instructor_dashboard(request, course_id):
             "StudentsDailyActivity",  # active students by day
             "StudentsDropoffPerDay",  # active students dropoff by day
             # "OverallGradeDistribution",  # overall point distribution for course
-            "StudentsActive",  # num students active in time period (default = 1wk)
-            "StudentsEnrolled",  # num students enrolled
             # "StudentsPerProblemCorrect",  # foreach problem, num students correct
             "ProblemGradeDistribution",  # foreach problem, grade distribution
         ]
+
         for analytic_name in DASHBOARD_ANALYTICS:
             analytics_results[analytic_name] = get_analytics_result(analytic_name)
 
@@ -985,7 +987,8 @@ def instructor_dashboard(request, course_id):
         fragment = wrap_xblock(
             'LmsRuntime', html_module, 'studio_view', fragment, None,
             extra_data={"course-id": course_key.to_deprecated_string()},
-            usage_id_serializer=lambda usage_id: quote_slashes(usage_id.to_deprecated_string())
+            usage_id_serializer=lambda usage_id: quote_slashes(usage_id.to_deprecated_string()),
+            request_token=request_token(request),
         )
         email_editor = fragment.content
 
@@ -1424,19 +1427,9 @@ def get_student_grade_summary_data(request, course, get_grades=True, get_raw_sco
 
 # Gradebook has moved to instructor.api.spoc_gradebook #
 
-@cache_control(no_cache=True, no_store=True, must_revalidate=True)
-def grade_summary(request, course_key):
-    """Display the grade summary for a course."""
-    course = get_course_with_access(request.user, 'staff', course_key)
-
-    # For now, just a page
-    context = {'course': course,
-               'staff_access': True, }
-    return render_to_response('courseware/grade_summary.html', context)
-
-
 #-----------------------------------------------------------------------------
 # enrollment
+
 
 def _do_enroll_students(course, course_key, students, secure=False, overload=False, auto_enroll=False, email_students=False, is_shib_course=False):
     """
@@ -1813,7 +1806,7 @@ def dump_grading_context(course):
             notes = ''
             if getattr(sdesc, 'score_by_attempt', False):
                 notes = ', score by attempt!'
-            msg += "      %s (grade_format=%s, Assignment=%s%s)\n" % (s.display_name, grade_format, aname, notes)
+            msg += "      %s (grade_format=%s, Assignment=%s%s)\n" % (sdesc.display_name, grade_format, aname, notes)
     msg += "all descriptors:\n"
     msg += "length=%d\n" % len(gcontext['all_descriptors'])
     msg = '<pre>%s</pre>' % msg.replace('<', '&lt;')

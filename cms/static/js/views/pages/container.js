@@ -2,47 +2,109 @@
  * XBlockContainerPage is used to display Studio's container page for an xblock which has children.
  * This page allows the user to understand and manipulate the xblock and its children.
  */
-define(["jquery", "underscore", "gettext", "js/views/baseview", "js/views/container",
-        "js/views/xblock", "js/views/components/add_xblock", "js/views/modals/edit_xblock", "js/models/xblock_info"],
-    function ($, _, gettext, BaseView, ContainerView, XBlockView, AddXBlockComponent, EditXBlockModal, XBlockInfo) {
-        var XBlockContainerPage = BaseView.extend({
+define(["jquery", "underscore", "gettext", "js/views/pages/base_page", "js/views/utils/view_utils",
+        "js/views/container", "js/views/xblock", "js/views/components/add_xblock", "js/views/modals/edit_xblock",
+        "js/models/xblock_info", "js/views/xblock_string_field_editor", "js/views/pages/container_subviews",
+        "js/views/unit_outline", "js/views/utils/xblock_utils"],
+    function ($, _, gettext, BasePage, ViewUtils, ContainerView, XBlockView, AddXBlockComponent,
+              EditXBlockModal, XBlockInfo, XBlockStringFieldEditor, ContainerSubviews, UnitOutlineView,
+              XBlockUtils) {
+        'use strict';
+        var XBlockContainerPage = BasePage.extend({
             // takes XBlockInfo as a model
+
+            events: {
+                "click .edit-button": "editXBlock",
+                "click .duplicate-button": "duplicateXBlock",
+                "click .delete-button": "deleteXBlock"
+            },
+
+            options: {
+                collapsedClass: 'is-collapsed'
+            },
 
             view: 'container_preview',
 
-            initialize: function() {
-                BaseView.prototype.initialize.call(this);
+            initialize: function(options) {
+                BasePage.prototype.initialize.call(this, options);
+                this.nameEditor = new XBlockStringFieldEditor({
+                    el: this.$('.wrapper-xblock-field'),
+                    model: this.model
+                });
+                this.nameEditor.render();
+                if (this.options.action === 'new') {
+                    this.nameEditor.$('.xblock-field-value-edit').click();
+                }
                 this.xblockView = new ContainerView({
                     el: this.$('.wrapper-xblock'),
                     model: this.model,
                     view: this.view
                 });
+                this.messageView = new ContainerSubviews.MessageView({
+                    el: this.$('.container-message'),
+                    model: this.model
+                });
+                this.messageView.render();
+                this.isUnitPage = this.options.isUnitPage;
+                if (this.isUnitPage) {
+                    this.xblockPublisher = new ContainerSubviews.Publisher({
+                        el: this.$('#publish-unit'),
+                        model: this.model,
+                        // When "Discard Changes" is clicked, the whole page must be re-rendered.
+                        renderPage: this.render
+                    });
+                    this.xblockPublisher.render();
+
+                    this.publishHistory = new ContainerSubviews.PublishHistory({
+                        el: this.$('#publish-history'),
+                        model: this.model
+                    });
+                    this.publishHistory.render();
+
+                    this.previewActions = new ContainerSubviews.PreviewActionController({
+                        el: this.$('.nav-actions'),
+                        model: this.model
+                    });
+                    this.previewActions.render();
+
+                    this.unitOutlineView = new UnitOutlineView({
+                        el: this.$('.wrapper-unit-overview'),
+                        model: this.model
+                    });
+                    this.unitOutlineView.render();
+                }
             },
 
             render: function(options) {
                 var self = this,
                     xblockView = this.xblockView,
-                    loadingElement = this.$('.ui-loading');
-                loadingElement.removeClass('is-hidden');
+                    loadingElement = this.$('.ui-loading'),
+                    unitLocationTree = this.$('.unit-location'),
+                    hiddenCss='is-hidden';
+
+                loadingElement.removeClass(hiddenCss);
 
                 // Hide both blocks until we know which one to show
-                xblockView.$el.addClass('is-hidden');
-
-                if (!options || !options.refresh) {
-                    // Add actions to any top level buttons, e.g. "Edit" of the container itself.
-                    // Do not add the actions on "refresh" though, as the handlers are already registered.
-                    self.addButtonActions(this.$el);
-                }
+                xblockView.$el.addClass(hiddenCss);
 
                 // Render the xblock
                 xblockView.render({
-                    success: function(xblock) {
-                        xblockView.xblock.runtime.notify("page-shown", self);
-                        xblockView.$el.removeClass('is-hidden');
+                    done: function() {
+                        // Show the xblock and hide the loading indicator
+                        xblockView.$el.removeClass(hiddenCss);
+                        loadingElement.addClass(hiddenCss);
+
+                        // Notify the runtime that the page has been successfully shown
+                        xblockView.notifyRuntime('page-shown', self);
+
+                        // Render the add buttons
                         self.renderAddXBlockComponents();
+
+                        // Refresh the views now that the xblock is visible
                         self.onXBlockRefresh(xblockView);
-                        self.refreshTitle();
-                        loadingElement.addClass('is-hidden');
+                        unitLocationTree.removeClass(hiddenCss);
+
+                        // Re-enable Backbone events for any updated DOM elements
                         self.delegateEvents();
                     }
                 });
@@ -56,15 +118,10 @@ define(["jquery", "underscore", "gettext", "js/views/baseview", "js/views/contai
                 return this.xblockView.model.urlRoot;
             },
 
-            refreshTitle: function() {
-                var title = this.$('.xblock-header .header-details .xblock-display-name').first().text().trim();
-                this.$('.page-header-title').text(title);
-                this.$('.page-header .subtitle a').last().text(title);
-            },
-
             onXBlockRefresh: function(xblockView) {
-                this.addButtonActions(xblockView.$el);
                 this.xblockView.refresh();
+                // Update publish and last modified information from the server.
+                this.model.fetch();
             },
 
             renderAddXBlockComponents: function() {
@@ -79,30 +136,31 @@ define(["jquery", "underscore", "gettext", "js/views/baseview", "js/views/contai
                 });
             },
 
-            addButtonActions: function(element) {
-                var self = this;
-                element.find('.edit-button').click(function(event) {
-                    event.preventDefault();
-                    self.editComponent(self.findXBlockElement(event.target));
-                });
-                element.find('.duplicate-button').click(function(event) {
-                    event.preventDefault();
-                    self.duplicateComponent(self.findXBlockElement(event.target));
-                });
-                element.find('.delete-button').click(function(event) {
-                    event.preventDefault();
-                    self.deleteComponent(self.findXBlockElement(event.target));
-                });
-            },
-
-            editComponent: function(xblockElement) {
-                var self = this,
+            editXBlock: function(event) {
+                var xblockElement = this.findXBlockElement(event.target),
+                    self = this,
                     modal = new EditXBlockModal({ });
+                event.preventDefault();
+
                 modal.edit(xblockElement, this.model, {
                     refresh: function() {
                         self.refreshXBlock(xblockElement);
                     }
                 });
+            },
+
+            duplicateXBlock: function(event) {
+                event.preventDefault();
+                this.duplicateComponent(this.findXBlockElement(event.target));
+            },
+
+            deleteXBlock: function(event) {
+                event.preventDefault();
+                this.deleteComponent(this.findXBlockElement(event.target));
+            },
+
+            createPlaceholderElement: function() {
+                return $("<div/>", { class: "studio-xblock-wrapper" });
             },
 
             createComponent: function(template, target) {
@@ -113,8 +171,8 @@ define(["jquery", "underscore", "gettext", "js/views/baseview", "js/views/contai
                     parentLocator = parentElement.data('locator'),
                     buttonPanel = target.closest('.add-xblock-component'),
                     listPanel = buttonPanel.prev(),
-                    scrollOffset = this.getScrollOffset(buttonPanel),
-                    placeholderElement = $('<div class="studio-xblock-wrapper"></div>').appendTo(listPanel),
+                    scrollOffset = ViewUtils.getScrollOffset(buttonPanel),
+                    placeholderElement = this.createPlaceholderElement().appendTo(listPanel),
                     requestData = _.extend(template, {
                         parent_locator: parentLocator
                     });
@@ -132,10 +190,10 @@ define(["jquery", "underscore", "gettext", "js/views/baseview", "js/views/contai
                 // for xblocks that can't be replaced inline, the entire parent will be refreshed.
                 var self = this,
                     parent = xblockElement.parent();
-                this.runOperationShowingMessage(gettext('Duplicating&hellip;'),
+                ViewUtils.runOperationShowingMessage(gettext('Duplicating&hellip;'),
                     function() {
-                        var scrollOffset = self.getScrollOffset(xblockElement),
-                            placeholderElement = $('<div class="studio-xblock-wrapper"></div>').insertAfter(xblockElement),
+                        var scrollOffset = ViewUtils.getScrollOffset(xblockElement),
+                            placeholderElement = self.createPlaceholderElement().insertAfter(xblockElement),
                             parentElement = self.findXBlockElement(parent),
                             requestData = {
                                 duplicate_source_locator: xblockElement.data('locator'),
@@ -151,34 +209,31 @@ define(["jquery", "underscore", "gettext", "js/views/baseview", "js/views/contai
             },
 
             deleteComponent: function(xblockElement) {
-                var self = this;
-                this.confirmThenRunOperation(gettext('Delete this component?'),
-                    gettext('Deleting this component is permanent and cannot be undone.'),
-                    gettext('Yes, delete this component'),
-                    function() {
-                        self.runOperationShowingMessage(gettext('Deleting&hellip;'),
-                            function() {
-                                return $.ajax({
-                                    type: 'DELETE',
-                                    url: self.getURLRoot() + "/" +
-                                        xblockElement.data('locator')
-                                }).success(_.bind(self.onDelete, self, xblockElement));
-                            });
+                var self = this,
+                    xblockInfo = new XBlockInfo({
+                        id: xblockElement.data('locator')
                     });
+                XBlockUtils.deleteXBlock(xblockInfo).done(function() {
+                    self.onDelete(xblockElement);
+                });
             },
 
             onDelete: function(xblockElement) {
                 // get the parent so we can remove this component from its parent.
                 var xblockView = this.xblockView,
-                    xblock = xblockView.xblock,
                     parent = this.findXBlockElement(xblockElement.parent());
                 xblockElement.remove();
-                xblockView.updateChildren(parent);
-                xblock.runtime.notify('deleted-child', parent.data('locator'));
+
+                // Inform the runtime that the child has been deleted in case
+                // other views are listening to deletion events.
+                xblockView.notifyRuntime('deleted-child', parent.data('locator'));
+
+                // Update publish and last modified information from the server.
+                this.model.fetch();
             },
 
             onNewXBlock: function(xblockElement, scrollOffset, data) {
-                this.setScrollOffset(xblockElement, scrollOffset);
+                ViewUtils.setScrollOffset(xblockElement, scrollOffset);
                 xblockElement.data('locator', data.locator);
                 return this.refreshXBlock(xblockElement);
             },
@@ -206,7 +261,7 @@ define(["jquery", "underscore", "gettext", "js/views/baseview", "js/views/contai
              * Refresh an xblock element inline on the page, using the specified xblockInfo.
              * Note that the element is removed and replaced with the newly rendered xblock.
              * @param xblockElement The xblock element to be refreshed.
-             * @returns {promise} A promise representing the complete operation.
+             * @returns {jQuery promise} A promise representing the complete operation.
              */
             refreshChildXBlock: function(xblockElement) {
                 var self = this,
