@@ -9,8 +9,9 @@ from django.http import Http404, HttpResponseBadRequest
 from django.contrib.auth.decorators import login_required
 from edxmako.shortcuts import render_to_string
 
-from xmodule_modifiers import replace_static_urls, wrap_xblock, wrap_fragment
+from xmodule_modifiers import replace_static_urls, wrap_xblock, wrap_fragment, request_token
 from xmodule.x_module import PREVIEW_VIEWS, STUDENT_VIEW, AUTHOR_VIEW
+from xmodule.contentstore.django import contentstore
 from xmodule.error_module import ErrorDescriptor
 from xmodule.exceptions import NotFoundError, ProcessingError
 from xmodule.modulestore.django import modulestore, ModuleI18nService
@@ -25,7 +26,7 @@ from lms.lib.xblock.field_data import LmsFieldData
 from cms.lib.xblock.field_data import CmsFieldData
 from cms.lib.xblock.runtime import local_resource_url
 
-from util.sandboxing import can_execute_unsafe_code
+from util.sandboxing import can_execute_unsafe_code, get_python_lib_zip
 
 import static_replace
 from .session_kv_store import SessionKeyValueStore
@@ -95,6 +96,20 @@ class PreviewModuleSystem(ModuleSystem):  # pylint: disable=abstract-method
         return local_resource_url(block, uri)
 
 
+class StudioUserService(object):
+    """
+    Provides a Studio implementation of the XBlock user service.
+    """
+
+    def __init__(self, request):
+        super(StudioUserService, self).__init__()
+        self._request = request
+
+    @property
+    def user_id(self):
+        return self._request.user.id
+
+
 def _preview_module_system(request, descriptor):
     """
     Returns a ModuleSystem for the specified descriptor that is specialized for
@@ -109,13 +124,21 @@ def _preview_module_system(request, descriptor):
 
     wrappers = [
         # This wrapper wraps the module in the template specified above
-        partial(wrap_xblock, 'PreviewRuntime', display_name_only=display_name_only, usage_id_serializer=unicode),
+        partial(
+            wrap_xblock,
+            'PreviewRuntime',
+            display_name_only=display_name_only,
+            usage_id_serializer=unicode,
+            request_token=request_token(request)
+        ),
 
         # This wrapper replaces urls in the output that start with /static
         # with the correct course-specific url for the static content
         partial(replace_static_urls, None, course_id=course_id),
         _studio_wrap_xblock,
     ]
+
+    descriptor.runtime._services['user'] = StudioUserService(request)  # pylint: disable=protected-access
 
     return PreviewModuleSystem(
         static_url=settings.STATIC_URL,
@@ -128,6 +151,7 @@ def _preview_module_system(request, descriptor):
         replace_urls=partial(static_replace.replace_static_urls, data_directory=None, course_id=course_id),
         user=request.user,
         can_execute_unsafe_code=(lambda: can_execute_unsafe_code(course_id)),
+        get_python_lib_zip=(lambda: get_python_lib_zip(contentstore, course_id)),
         mixins=settings.XBLOCK_MIXINS,
         course_id=course_id,
         anonymous_student_id='student',
@@ -175,8 +199,8 @@ def _studio_wrap_xblock(xblock, view, frag, context, display_name_only=False):
     """
     Wraps the results of rendering an XBlock view in a div which adds a header and Studio action buttons.
     """
-    # Only add the Studio wrapper when on the container page. The unit page will remain as is for now.
-    if context.get('container_view', None) and view in PREVIEW_VIEWS:
+    # Only add the Studio wrapper when on the container page. The "Pages" page will remain as is for now.
+    if not context.get('is_pages_view', None) and view in PREVIEW_VIEWS:
         root_xblock = context.get('root_xblock')
         is_root = root_xblock and xblock.location == root_xblock.location
         is_reorderable = _is_xblock_reorderable(xblock, context)
@@ -203,7 +227,7 @@ def get_preview_fragment(request, descriptor, context):
 
     try:
         fragment = module.render(preview_view, context)
-    except Exception as exc:                          # pylint: disable=W0703
+    except Exception as exc:                          # pylint: disable=broad-except
         log.warning("Unable to render %s for %r", preview_view, module, exc_info=True)
         fragment = Fragment(render_to_string('html_error.html', {'message': str(exc)}))
     return fragment

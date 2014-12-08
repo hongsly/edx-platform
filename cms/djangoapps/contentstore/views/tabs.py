@@ -1,7 +1,7 @@
 """
 Views related to course tabs
 """
-from access import has_course_access
+from student.auth import has_course_author_access
 from util.json_request import expect_json, JsonResponse
 
 from django.http import HttpResponseNotFound
@@ -12,12 +12,14 @@ from django_future.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
 from edxmako.shortcuts import render_to_response
 from xmodule.modulestore.django import modulestore
+from xmodule.modulestore import ModuleStoreEnum
 from xmodule.tabs import CourseTabList, StaticTab, CourseTab, InvalidTabsException
 from opaque_keys.edx.keys import CourseKey, UsageKey
 
 from ..utils import get_lms_link_for_item
 
 __all__ = ['tabs_handler']
+
 
 @expect_json
 @login_required
@@ -38,7 +40,7 @@ def tabs_handler(request, course_key_string):
     Instead use the general xblock URL (see item.xblock_handler).
     """
     course_key = CourseKey.from_string(course_key_string)
-    if not has_course_access(request.user, course_key):
+    if not has_course_author_access(request.user, course_key):
         raise PermissionDenied()
 
     course_item = modulestore().get_course(course_key)
@@ -192,7 +194,7 @@ def primitive_delete(course, num):
     # Note for future implementations: if you delete a static_tab, then Chris Dodge
     # points out that there's other stuff to delete beyond this element.
     # This code happens to not delete static_tab so it doesn't come up.
-    modulestore().update_item(course, '**replace_user**')
+    modulestore().update_item(course, ModuleStoreEnum.UserID.primitive_command)
 
 
 def primitive_insert(course, num, tab_type, name):
@@ -201,5 +203,4 @@ def primitive_insert(course, num, tab_type, name):
     new_tab = CourseTab.from_json({u'type': unicode(tab_type), u'name': unicode(name)})
     tabs = course.tabs
     tabs.insert(num, new_tab)
-    modulestore().update_item(course, '**replace_user**')
-
+    modulestore().update_item(course, ModuleStoreEnum.UserID.primitive_command)

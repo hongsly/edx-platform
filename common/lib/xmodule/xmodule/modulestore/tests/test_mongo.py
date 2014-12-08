@@ -1,4 +1,9 @@
-# pylint: disable=E0611
+"""
+Unit tests for the Mongo modulestore
+"""
+# pylint: disable=no-member
+# pylint: disable=protected-access
+# pylint: disable=no-name-in-module
 from nose.tools import assert_equals, assert_raises, \
     assert_not_equals, assert_false, assert_true, assert_greater, assert_is_instance, assert_is_none
 # pylint: enable=E0611
@@ -20,29 +25,31 @@ from xblock.plugin import Plugin
 
 from xmodule.tests import DATA_DIR
 from opaque_keys.edx.locations import Location
-from xmodule.modulestore import MONGO_MODULESTORE_TYPE, BRANCH_DRAFT_PREFERRED
-from xmodule.modulestore.mongo import MongoModuleStore, MongoKeyValueStore
+from xmodule.modulestore import ModuleStoreEnum
+from xmodule.modulestore.mongo import MongoKeyValueStore
 from xmodule.modulestore.draft import DraftModuleStore
 from opaque_keys.edx.locations import SlashSeparatedCourseKey, AssetLocation
+from opaque_keys.edx.locator import LibraryLocator
+from opaque_keys.edx.keys import UsageKey
 from xmodule.modulestore.xml_exporter import export_to_xml
 from xmodule.modulestore.xml_importer import import_from_xml, perform_xlint
 from xmodule.contentstore.mongo import MongoContentStore
 
-from xmodule.modulestore.tests.test_modulestore import check_path_to_location
 from nose.tools import assert_in
 from xmodule.exceptions import NotFoundError
 from git.test.lib.asserts import assert_not_none
 from xmodule.x_module import XModuleMixin
 from xmodule.modulestore.mongo.base import as_draft
-from xmodule.modulestore.tests.factories import check_mongo_calls
-
+from xmodule.modulestore.tests.mongo_connection import MONGO_PORT_NUM, MONGO_HOST
+from xmodule.modulestore.edit_info import EditInfoMixin
 
 log = logging.getLogger(__name__)
 
-HOST = 'localhost'
-PORT = 27017
+HOST = MONGO_HOST
+PORT = MONGO_PORT_NUM
 DB = 'test_mongo_%s' % uuid4().hex[:5]
 COLLECTION = 'modulestore'
+ASSET_COLLECTION = 'assetstore'
 FS_ROOT = DATA_DIR  # TODO (vshnayder): will need a real fs_root for testing load_item
 DEFAULT_CLASS = 'xmodule.raw_module.RawDescriptor'
 RENDER_TEMPLATE = lambda t_n, d, ctx = None, nsp = 'main': ''
@@ -58,8 +65,10 @@ class ReferenceTestXBlock(XBlock, XModuleMixin):
     reference_dict = ReferenceValueDict(scope=Scope.settings)
 
 
-class TestMongoModuleStore(unittest.TestCase):
-    '''Tests!'''
+class TestMongoModuleStoreBase(unittest.TestCase):
+    '''
+    Basic setup for all tests
+    '''
     # Explicitly list the courses to load (don't want the big one)
     courses = ['toy', 'simple', 'simple_with_draft', 'test_unicode']
 
@@ -71,7 +80,6 @@ class TestMongoModuleStore(unittest.TestCase):
             tz_aware=True,
             document_class=dict,
         )
-        cls.connection.drop_database(DB)
 
         # NOTE: Creating a single db for all the tests to save time.  This
         # is ok only as long as none of the tests modify the db.
@@ -86,30 +94,43 @@ class TestMongoModuleStore(unittest.TestCase):
             cls.connection.drop_database(DB)
             cls.connection.close()
 
-    @staticmethod
-    def initdb():
+    @classmethod
+    def add_asset_collection(cls, doc_store_config):
+        """
+        No asset collection.
+        """
+        pass
+
+    @classmethod
+    def initdb(cls):
         # connect to the db
         doc_store_config = {
             'host': HOST,
+            'port': PORT,
             'db': DB,
             'collection': COLLECTION,
         }
+        cls.add_asset_collection(doc_store_config)
+
         # since MongoModuleStore and MongoContentStore are basically assumed to be together, create this class
         # as well
-        content_store = MongoContentStore(HOST, DB)
+        content_store = MongoContentStore(HOST, DB, port=PORT)
         #
         # Also test draft store imports
         #
         draft_store = DraftModuleStore(
+            content_store,
             doc_store_config, FS_ROOT, RENDER_TEMPLATE,
             default_class=DEFAULT_CLASS,
-            branch_setting_func=lambda: BRANCH_DRAFT_PREFERRED
+            branch_setting_func=lambda: ModuleStoreEnum.Branch.draft_preferred,
+            xblock_mixins=(EditInfoMixin,)
+
         )
         import_from_xml(
             draft_store,
             999,
             DATA_DIR,
-            TestMongoModuleStore.courses,
+            cls.courses,
             static_content_store=content_store
         )
 
@@ -131,12 +152,32 @@ class TestMongoModuleStore(unittest.TestCase):
         # Destroy the test db.
         connection.drop_database(DB)
 
-    def setUp(self):
-        # make a copy for convenience
-        self.connection = TestMongoModuleStore.connection
+    @classmethod
+    def setUp(cls):
+        cls.dummy_user = ModuleStoreEnum.UserID.test
 
-    def tearDown(self):
+    @classmethod
+    def tearDown(cls):
         pass
+
+
+class TestMongoModuleStore(TestMongoModuleStoreBase):
+    '''Module store tests'''
+
+    @classmethod
+    def add_asset_collection(cls, doc_store_config):
+        """
+        No asset collection - it's not used in the tests below.
+        """
+        pass
+
+    @classmethod
+    def setupClass(cls):
+        super(TestMongoModuleStore, cls).setupClass()
+
+    @classmethod
+    def teardownClass(cls):
+        super(TestMongoModuleStore, cls).teardownClass()
 
     def test_init(self):
         '''Make sure the db loads'''
@@ -144,16 +185,17 @@ class TestMongoModuleStore(unittest.TestCase):
         assert_greater(len(ids), 12)
 
     def test_mongo_modulestore_type(self):
-        store = MongoModuleStore(
-            {'host': HOST, 'db': DB, 'collection': COLLECTION},
+        store = DraftModuleStore(
+            None,
+            {'host': HOST, 'db': DB, 'port': PORT, 'collection': COLLECTION},
             FS_ROOT, RENDER_TEMPLATE, default_class=DEFAULT_CLASS
         )
-        assert_equals(store.get_modulestore_type(''), MONGO_MODULESTORE_TYPE)
+        assert_equals(store.get_modulestore_type(''), ModuleStoreEnum.Type.mongo)
 
     def test_get_courses(self):
         '''Make sure the course objects loaded properly'''
         courses = self.draft_store.get_courses()
-        assert_equals(len(courses), 5)
+        assert_equals(len(courses), 6)
         course_ids = [course.id for course in courses]
         for course_key in [
 
@@ -195,6 +237,16 @@ class TestMongoModuleStore(unittest.TestCase):
             assert_false(self.draft_store.has_course(mix_cased))
             assert_false(self.draft_store.has_course(mix_cased, ignore_case=True))
 
+    def test_has_course_with_library(self):
+        """
+        Test that has_course() returns False when called with a LibraryLocator.
+        This is required because MixedModuleStore will use has_course() to check
+        where a given library are stored.
+        """
+        lib_key = LibraryLocator("TestOrg", "TestLib")
+        result = self.draft_store.has_course(lib_key)
+        assert_false(result)
+
     def test_loads(self):
         assert_not_none(
             self.draft_store.get_item(Location('edX', 'toy', '2012_Fall', 'course', '2012_Fall'))
@@ -226,7 +278,6 @@ class TestMongoModuleStore(unittest.TestCase):
             self.draft_store.get_item(Location('edX', 'test_unicode', '2012_Fall', 'chapter', 'Overview')),
         )
 
-
     def test_find_one(self):
         assert_not_none(
             self.draft_store._find_one(Location('edX', 'toy', '2012_Fall', 'course', '2012_Fall')),
@@ -239,11 +290,6 @@ class TestMongoModuleStore(unittest.TestCase):
         assert_not_none(
             self.draft_store._find_one(Location('edX', 'toy', '2012_Fall', 'video', 'Welcome')),
         )
-
-    def test_path_to_location(self):
-        '''Make sure that path_to_location works'''
-        with check_mongo_calls(self.draft_store, 9):
-            check_path_to_location(self.draft_store)
 
     def test_xlinter(self):
         '''
@@ -284,54 +330,57 @@ class TestMongoModuleStore(unittest.TestCase):
         Test getting, setting, and defaulting the locked attr and arbitrary attrs.
         """
         location = Location('edX', 'toy', '2012_Fall', 'course', '2012_Fall')
-        course_content, __ = TestMongoModuleStore.content_store.get_all_content_for_course(location.course_key)
+        course_content, __ = self.content_store.get_all_content_for_course(location.course_key)
         assert_true(len(course_content) > 0)
         # a bit overkill, could just do for content[0]
         for content in course_content:
             assert not content.get('locked', False)
-            asset_key = AssetLocation._from_deprecated_son(content['_id'], location.run)
-            assert not TestMongoModuleStore.content_store.get_attr(asset_key, 'locked', False)
-            attrs = TestMongoModuleStore.content_store.get_attrs(asset_key)
+            asset_key = AssetLocation._from_deprecated_son(content.get('content_son', content['_id']), location.run)
+            assert not self.content_store.get_attr(asset_key, 'locked', False)
+            attrs = self.content_store.get_attrs(asset_key)
             assert_in('uploadDate', attrs)
             assert not attrs.get('locked', False)
-            TestMongoModuleStore.content_store.set_attr(asset_key, 'locked', True)
-            assert TestMongoModuleStore.content_store.get_attr(asset_key, 'locked', False)
-            attrs = TestMongoModuleStore.content_store.get_attrs(asset_key)
+            self.content_store.set_attr(asset_key, 'locked', True)
+            assert self.content_store.get_attr(asset_key, 'locked', False)
+            attrs = self.content_store.get_attrs(asset_key)
             assert_in('locked', attrs)
             assert attrs['locked'] is True
-            TestMongoModuleStore.content_store.set_attrs(asset_key, {'miscel': 99})
-            assert_equals(TestMongoModuleStore.content_store.get_attr(asset_key, 'miscel'), 99)
+            self.content_store.set_attrs(asset_key, {'miscel': 99})
+            assert_equals(self.content_store.get_attr(asset_key, 'miscel'), 99)
 
-        asset_key = AssetLocation._from_deprecated_son(course_content[0]['_id'], location.run)
+        asset_key = AssetLocation._from_deprecated_son(
+            course_content[0].get('content_son', course_content[0]['_id']),
+            location.run
+        )
         assert_raises(
-            AttributeError, TestMongoModuleStore.content_store.set_attr, asset_key,
+            AttributeError, self.content_store.set_attr, asset_key,
             'md5', 'ff1532598830e3feac91c2449eaa60d6'
         )
         assert_raises(
-            AttributeError, TestMongoModuleStore.content_store.set_attrs, asset_key,
+            AttributeError, self.content_store.set_attrs, asset_key,
             {'foo': 9, 'md5': 'ff1532598830e3feac91c2449eaa60d6'}
         )
         assert_raises(
-            NotFoundError, TestMongoModuleStore.content_store.get_attr,
+            NotFoundError, self.content_store.get_attr,
             Location('bogus', 'bogus', 'bogus', 'asset', 'bogus'),
             'displayname'
         )
         assert_raises(
-            NotFoundError, TestMongoModuleStore.content_store.set_attr,
+            NotFoundError, self.content_store.set_attr,
             Location('bogus', 'bogus', 'bogus', 'asset', 'bogus'),
             'displayname', 'hello'
         )
         assert_raises(
-            NotFoundError, TestMongoModuleStore.content_store.get_attrs,
+            NotFoundError, self.content_store.get_attrs,
             Location('bogus', 'bogus', 'bogus', 'asset', 'bogus')
         )
         assert_raises(
-            NotFoundError, TestMongoModuleStore.content_store.set_attrs,
+            NotFoundError, self.content_store.set_attrs,
             Location('bogus', 'bogus', 'bogus', 'asset', 'bogus'),
             {'displayname': 'hello'}
         )
         assert_raises(
-            NotFoundError, TestMongoModuleStore.content_store.set_attrs,
+            NotFoundError, self.content_store.set_attrs,
             Location('bogus', 'bogus', 'bogus', 'asset', None),
             {'displayname': 'hello'}
         )
@@ -343,7 +392,7 @@ class TestMongoModuleStore(unittest.TestCase):
         for course_number in self.courses:
             course_locations = self.draft_store.get_courses_for_wiki(course_number)
             assert_equals(len(course_locations), 1)
-            assert_equals(Location('edX', course_number, '2012_Fall', 'course', '2012_Fall'), course_locations[0])
+            assert_equals(SlashSeparatedCourseKey('edX', course_number, '2012_Fall'), course_locations[0])
 
         course_locations = self.draft_store.get_courses_for_wiki('no_such_wiki')
         assert_equals(len(course_locations), 0)
@@ -351,7 +400,7 @@ class TestMongoModuleStore(unittest.TestCase):
         # set toy course to share the wiki with simple course
         toy_course = self.draft_store.get_course(SlashSeparatedCourseKey('edX', 'toy', '2012_Fall'))
         toy_course.wiki_slug = 'simple'
-        self.draft_store.update_item(toy_course)
+        self.draft_store.update_item(toy_course, ModuleStoreEnum.UserID.test)
 
         # now toy_course should not be retrievable with old wiki_slug
         course_locations = self.draft_store.get_courses_for_wiki('toy')
@@ -361,16 +410,16 @@ class TestMongoModuleStore(unittest.TestCase):
         course_locations = self.draft_store.get_courses_for_wiki('simple')
         assert_equals(len(course_locations), 2)
         for course_number in ['toy', 'simple']:
-            assert_in(Location('edX', course_number, '2012_Fall', 'course', '2012_Fall'), course_locations)
+            assert_in(SlashSeparatedCourseKey('edX', course_number, '2012_Fall'), course_locations)
 
         # configure simple course to use unique wiki_slug.
         simple_course = self.draft_store.get_course(SlashSeparatedCourseKey('edX', 'simple', '2012_Fall'))
         simple_course.wiki_slug = 'edX.simple.2012_Fall'
-        self.draft_store.update_item(simple_course)
+        self.draft_store.update_item(simple_course, ModuleStoreEnum.UserID.test)
         # it should be retrievable with its new wiki_slug
         course_locations = self.draft_store.get_courses_for_wiki('edX.simple.2012_Fall')
         assert_equals(len(course_locations), 1)
-        assert_in(Location('edX', 'simple', '2012_Fall', 'course', '2012_Fall'), course_locations)
+        assert_in(SlashSeparatedCourseKey('edX', 'simple', '2012_Fall'), course_locations)
 
     @Plugin.register_temp_plugin(ReferenceTestXBlock, 'ref_test')
     def test_reference_converters(self):
@@ -382,13 +431,28 @@ class TestMongoModuleStore(unittest.TestCase):
         def setup_test():
             course = self.draft_store.get_course(course_key)
             # can't use item factory as it depends on django settings
-            p1ele = self.draft_store.create_and_save_xmodule(
-                course.id.make_usage_key('problem', 'p1'), 99, runtime=course.runtime)
-            p2ele = self.draft_store.create_and_save_xmodule(
-                course.id.make_usage_key('problem', 'p2'), 99, runtime=course.runtime)
+            p1ele = self.draft_store.create_item(
+                99,
+                course_key,
+                'problem',
+                block_id='p1',
+                runtime=course.runtime
+            )
+            p2ele = self.draft_store.create_item(
+                99,
+                course_key,
+                'problem',
+                block_id='p2',
+                runtime=course.runtime
+            )
             self.refloc = course.id.make_usage_key('ref_test', 'ref_test')
-            self.draft_store.create_and_save_xmodule(
-                self.refloc, 99, runtime=course.runtime, fields={
+            self.draft_store.create_item(
+                99,
+                self.refloc.course_key,
+                self.refloc.block_type,
+                block_id=self.refloc.block_id,
+                runtime=course.runtime,
+                fields={
                     'reference_link': p1ele.location,
                     'reference_list': [p1ele.location, p2ele.location],
                     'reference_dict': {'p1': p1ele.location, 'p2': p2ele.location},
@@ -399,20 +463,20 @@ class TestMongoModuleStore(unittest.TestCase):
         def check_xblock_fields():
             def check_children(xblock):
                 for child in xblock.children:
-                    assert_is_instance(child, Location)
+                    assert_is_instance(child, UsageKey)
 
             course = self.draft_store.get_course(course_key)
             check_children(course)
 
             refele = self.draft_store.get_item(self.refloc)
             check_children(refele)
-            assert_is_instance(refele.reference_link, Location)
+            assert_is_instance(refele.reference_link, UsageKey)
             assert_greater(len(refele.reference_list), 0)
             for ref in refele.reference_list:
-                assert_is_instance(ref, Location)
+                assert_is_instance(ref, UsageKey)
             assert_greater(len(refele.reference_dict), 0)
             for ref in refele.reference_dict.itervalues():
-                assert_is_instance(ref, Location)
+                assert_is_instance(ref, UsageKey)
 
         def check_mongo_fields():
             def get_item(location):
@@ -485,92 +549,54 @@ class TestMongoModuleStore(unittest.TestCase):
         finally:
             shutil.rmtree(root_dir)
 
-    def test_has_changes_direct_only(self):
+    def _create_test_tree(self, name, user_id=None):
         """
-        Tests that has_changes() returns false when an xblock in a direct only category is checked
+        Creates and returns a tree with the following structure:
+        Grandparent
+            Parent Sibling
+            Parent
+                Child
+                Child Sibling
+
         """
-        course_location = Location('edx', 'direct', '2012_Fall', 'course', 'test_course')
-        chapter_location = Location('edx', 'direct', '2012_Fall', 'chapter', 'test_chapter')
-        dummy_user = 123
+        if user_id is None:
+            user_id = self.dummy_user
 
-        # Create dummy direct only xblocks
-        self.draft_store.create_and_save_xmodule(course_location, user_id=dummy_user)
-        self.draft_store.create_and_save_xmodule(chapter_location, user_id=dummy_user)
+        org = 'edX'
+        course = 'tree{}'.format(name)
+        run = name
 
-        # Check that neither xblock has changes
-        self.assertFalse(self.draft_store.has_changes(course_location))
-        self.assertFalse(self.draft_store.has_changes(chapter_location))
+        if not self.draft_store.has_course(SlashSeparatedCourseKey(org, course, run)):
+            self.draft_store.create_course(org, course, run, user_id)
 
-    def test_has_changes(self):
-        """
-        Tests that has_changes() only returns true when changes are present
-        """
-        location = Location('edX', 'changes', '2012_Fall', 'vertical', 'test_vertical')
-        dummy_user = 123
+            locations = {
+                'grandparent': Location(org, course, run, 'chapter', 'grandparent'),
+                'parent_sibling': Location(org, course, run, 'sequential', 'parent_sibling'),
+                'parent': Location(org, course, run, 'sequential', 'parent'),
+                'child_sibling': Location(org, course, run, 'vertical', 'child_sibling'),
+                'child': Location(org, course, run, 'vertical', 'child'),
+            }
 
-        # Create a dummy component to test against
-        self.draft_store.create_and_save_xmodule(location, user_id=dummy_user)
+            for key in locations:
+                self.draft_store.create_item(
+                    user_id,
+                    locations[key].course_key,
+                    locations[key].block_type,
+                    block_id=locations[key].block_id
+                )
 
-        # Not yet published, so changes are present
-        self.assertTrue(self.draft_store.has_changes(location))
+            grandparent = self.draft_store.get_item(locations['grandparent'])
+            grandparent.children += [locations['parent_sibling'], locations['parent']]
+            self.draft_store.update_item(grandparent, user_id=user_id)
 
-        # Publish and verify that there are no unpublished changes
-        self.draft_store.publish(location, dummy_user)
-        self.assertFalse(self.draft_store.has_changes(location))
+            parent = self.draft_store.get_item(locations['parent'])
+            parent.children += [locations['child_sibling'], locations['child']]
+            self.draft_store.update_item(parent, user_id=user_id)
 
-        # Change the component, then check that there now are changes
-        component = self.draft_store.get_item(location)
-        component.display_name = 'Changed Display Name'
-        self.draft_store.update_item(component, dummy_user)
-        self.assertTrue(self.draft_store.has_changes(location))
+            self.draft_store.publish(locations['parent'], user_id)
+            self.draft_store.publish(locations['parent_sibling'], user_id)
 
-        # Publish and verify again
-        self.draft_store.publish(location, dummy_user)
-        self.assertFalse(self.draft_store.has_changes(location))
-
-    def test_update_edit_info(self):
-        """
-        Tests that edited_on and edited_by are set correctly during an update
-        """
-        location = Location('edX', 'editInfoTest', '2012_Fall', 'html', 'test_html')
-        dummy_user = 123
-
-        # Create a dummy component to test against
-        self.draft_store.create_and_save_xmodule(location, user_id=dummy_user)
-
-        # Store the current edit time and verify that dummy_user created the component
-        component = self.draft_store.get_item(location)
-        self.assertEqual(component.edited_by, dummy_user)
-        old_edited_on = component.edited_on
-
-        # Change the component
-        component.display_name = component.display_name + ' Changed'
-        self.draft_store.update_item(component, dummy_user)
-        updated_component = self.draft_store.get_item(location)
-
-        # Verify the ordering of edit times and that dummy_user made the edit
-        self.assertLess(old_edited_on, updated_component.edited_on)
-        self.assertEqual(updated_component.edited_by, dummy_user)
-
-    def test_update_published_info(self):
-        """
-        Tests that published_date and published_by are set correctly
-        """
-        location = Location('edX', 'publishInfo', '2012_Fall', 'html', 'test_html')
-        create_user = 123
-        publish_user = 456
-
-        # Create a dummy component to test against
-        self.draft_store.create_and_save_xmodule(location, user_id=create_user)
-
-        # Store the current time, then publish
-        old_time = datetime.now(UTC)
-        self.draft_store.publish(location, publish_user)
-        updated_component = self.draft_store.get_item(location)
-
-        # Verify the time order and that publish_user caused publication
-        self.assertLessEqual(old_time, updated_component.published_date)
-        self.assertEqual(updated_component.published_by, publish_user)
+        return locations
 
     def test_migrate_published_info(self):
         """
@@ -591,13 +617,90 @@ class TestMongoModuleStore(unittest.TestCase):
                     'published_by': published_by,
                 },
             },
+            allow_not_found=True,
         )
 
         # Retrieve the block and verify its fields
         component = self.draft_store.get_item(location)
-        self.assertEqual(component.published_date, published_date)
+        self.assertEqual(component.published_on, published_date)
         self.assertEqual(component.published_by, published_by)
 
+    def test_export_course_with_peer_component(self):
+        """
+        Test export course when link_to_location is given in peer grading interface settings.
+        """
+
+        name = "export_peer_component"
+
+        locations = self._create_test_tree(name)
+
+        # Insert the test block directly into the module store
+        problem_location = Location('edX', 'tree{}'.format(name), name, 'combinedopenended', 'test_peer_problem')
+
+        self.draft_store.create_child(
+            self.dummy_user,
+            locations["child"],
+            problem_location.block_type,
+            block_id=problem_location.block_id
+        )
+
+        interface_location = Location('edX', 'tree{}'.format(name), name, 'peergrading', 'test_peer_interface')
+
+        self.draft_store.create_child(
+            self.dummy_user,
+            locations["child"],
+            interface_location.block_type,
+            block_id=interface_location.block_id
+        )
+
+        self.draft_store._update_single_item(
+            as_draft(interface_location),
+            {
+                'definition.data': {},
+                'metadata': {
+                    'link_to_location': unicode(problem_location),
+                    'use_for_single_location': True,
+                },
+            },
+        )
+
+        component = self.draft_store.get_item(interface_location)
+        self.assertEqual(unicode(component.link_to_location), unicode(problem_location))
+
+        root_dir = path(mkdtemp())
+
+        # export_to_xml should work.
+        try:
+            export_to_xml(self.draft_store, self.content_store, interface_location.course_key, root_dir, 'test_export')
+        finally:
+            shutil.rmtree(root_dir)
+
+
+class TestMongoModuleStoreWithNoAssetCollection(TestMongoModuleStore):
+    '''
+    Tests a situation where no asset_collection is specified.
+    '''
+
+    @classmethod
+    def add_asset_collection(cls, doc_store_config):
+        """
+        No asset collection.
+        """
+        pass
+
+    @classmethod
+    def setupClass(cls):
+        super(TestMongoModuleStoreWithNoAssetCollection, cls).setupClass()
+
+    @classmethod
+    def teardownClass(cls):
+        super(TestMongoModuleStoreWithNoAssetCollection, cls).teardownClass()
+
+    def test_no_asset_collection(self):
+        courses = self.draft_store.get_courses()
+        course = courses[0]
+        # Confirm that no specified asset collection name means empty asset metadata.
+        self.assertEquals(self.draft_store.get_all_asset_metadata(course.id, 'asset'), [])
 
 
 class TestMongoKeyValueStore(object):

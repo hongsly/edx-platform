@@ -1,19 +1,18 @@
 """
 Test the heartbeat
 """
-from django.test.client import Client
-from django.core.urlresolvers import reverse
 import json
+
+from django.core.urlresolvers import reverse
 from django.db.utils import DatabaseError
-import mock
-from django.test.utils import override_settings
-from django.conf import settings
+from django.test.client import Client
 from django.test.testcases import TestCase
-from xmodule.modulestore.tests.django_utils import draft_mongo_store_config
+from mock import patch
 
-TEST_MODULESTORE = draft_mongo_store_config(settings.TEST_ROOT / "data")
+from xmodule.exceptions import HeartbeatFailure
 
-@override_settings(MODULESTORE=TEST_MODULESTORE)
+
+@patch('heartbeat.views.modulestore')
 class HeartbeatTestCase(TestCase):
     """
     Test the heartbeat
@@ -24,22 +23,19 @@ class HeartbeatTestCase(TestCase):
         self.heartbeat_url = reverse('heartbeat')
         return super(HeartbeatTestCase, self).setUp()
 
-    def tearDown(self):
-        return super(HeartbeatTestCase, self).tearDown()
-
-    def test_success(self):
+    def test_success(self, mock_modulestore):  # pylint: disable=unused-argument
         response = self.client.get(self.heartbeat_url)
         self.assertEqual(response.status_code, 200)
 
-    def test_sql_fail(self):
-        with mock.patch('heartbeat.views.connection') as mock_connection:
-            mock_connection.cursor.return_value.execute.side_effect = DatabaseError
-            response = self.client.get(self.heartbeat_url)
-            self.assertEqual(response.status_code, 503)
-            response_dict = json.loads(response.content)
-            self.assertIn('SQL', response_dict)
+    @patch('heartbeat.views.connection')
+    def test_sql_fail(self, mock_connection, mock_modulestore):  # pylint: disable=unused-argument
+        mock_connection.cursor.return_value.execute.side_effect = DatabaseError
+        response = self.client.get(self.heartbeat_url)
+        self.assertEqual(response.status_code, 503)
+        response_dict = json.loads(response.content)
+        self.assertIn('SQL', response_dict)
 
-    def test_mongo_fail(self):
-        with mock.patch('pymongo.MongoClient.alive', return_value=False):
-            response = self.client.get(self.heartbeat_url)
-            self.assertEqual(response.status_code, 503)
+    def test_modulestore_fail(self, mock_modulestore):  # pylint: disable=unused-argument
+        mock_modulestore.return_value.heartbeat.side_effect = HeartbeatFailure('msg', 'service')
+        response = self.client.get(self.heartbeat_url)
+        self.assertEqual(response.status_code, 503)

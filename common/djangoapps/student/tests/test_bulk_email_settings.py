@@ -4,25 +4,28 @@ that bulk email is always disabled for non-Mongo backed courses, regardless
 of email feature flag, and that the view is conditionally available when
 Course Auth is turned on.
 """
+import unittest
 
-from django.test.utils import override_settings
 from django.conf import settings
-from django.core.urlresolvers import reverse, NoReverseMatch
-from unittest.case import SkipTest
-
-from courseware.tests.tests import TEST_DATA_MONGO_MODULESTORE
-from student.tests.factories import UserFactory, CourseEnrollmentFactory
-from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
-from xmodule.modulestore.tests.factories import CourseFactory
-from courseware.tests.modulestore_config import TEST_DATA_MIXED_MODULESTORE
+from django.core.urlresolvers import reverse
+from django.test.utils import override_settings
+from mock import patch
 from opaque_keys.edx.locations import SlashSeparatedCourseKey
 
-from bulk_email.models import CourseAuthorization
+from student.tests.factories import UserFactory, CourseEnrollmentFactory
+from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
+from xmodule.modulestore.tests.django_utils import (
+    TEST_DATA_MOCK_MODULESTORE, TEST_DATA_MIXED_TOY_MODULESTORE
+)
+from xmodule.modulestore.tests.factories import CourseFactory
 
-from mock import patch
+# This import is for an lms djangoapp.
+# Its testcases are only run under lms.
+from bulk_email.models import CourseAuthorization  # pylint: disable=import-error
 
 
-@override_settings(MODULESTORE=TEST_DATA_MONGO_MODULESTORE)
+@override_settings(MODULESTORE=TEST_DATA_MOCK_MODULESTORE)
+@unittest.skipUnless(settings.ROOT_URLCONF == 'lms.urls', 'Test only valid in lms')
 class TestStudentDashboardEmailView(ModuleStoreTestCase):
     """
     Check for email view displayed with flag
@@ -35,11 +38,7 @@ class TestStudentDashboardEmailView(ModuleStoreTestCase):
         CourseEnrollmentFactory.create(user=student, course_id=self.course.id)
         self.client.login(username=student.username, password="test")
 
-        try:
-            # URL for dashboard
-            self.url = reverse('dashboard')
-        except NoReverseMatch:
-            raise SkipTest("Skip this test if url cannot be found (ie running from CMS tests)")
+        self.url = reverse('dashboard')
         # URL for email settings modal
         self.email_modal_link = (
             ('<a href="#email-settings-modal" class="email-settings" rel="leanModal" '
@@ -91,7 +90,8 @@ class TestStudentDashboardEmailView(ModuleStoreTestCase):
         self.assertTrue(self.email_modal_link in response.content)
 
 
-@override_settings(MODULESTORE=TEST_DATA_MIXED_MODULESTORE)
+@override_settings(MODULESTORE=TEST_DATA_MIXED_TOY_MODULESTORE)
+@unittest.skipUnless(settings.ROOT_URLCONF == 'lms.urls', 'Test only valid in lms')
 class TestStudentDashboardEmailViewXMLBacked(ModuleStoreTestCase):
     """
     Check for email view on student dashboard, with XML backed course.
@@ -107,11 +107,7 @@ class TestStudentDashboardEmailViewXMLBacked(ModuleStoreTestCase):
         )
         self.client.login(username=student.username, password="test")
 
-        try:
-            # URL for dashboard
-            self.url = reverse('dashboard')
-        except NoReverseMatch:
-            raise SkipTest("Skip this test if url cannot be found (ie running from CMS tests)")
+        self.url = reverse('dashboard')
 
         # URL for email settings modal
         self.email_modal_link = (

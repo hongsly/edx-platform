@@ -50,6 +50,7 @@ lib_paths:
     - xmodule_js/common_static/js/vendor/jasmine-imagediff.js
     - xmodule_js/common_static/js/vendor/jasmine.async.js
     - xmodule_js/common_static/js/vendor/CodeMirror/codemirror.js
+    - xmodule_js/common_static/js/vendor/domReady.js
     - xmodule_js/common_static/js/vendor/URI.min.js
     - xmodule_js/src/xmodule.js
     - xmodule_js/common_static/coffee/src/jquery.immediateDescendents.js
@@ -61,11 +62,13 @@ lib_paths:
 src_paths:
     - coffee/src
     - js
+    - js/common_helpers
 
 # Paths to spec (test) JavaScript files
 spec_paths:
     - coffee/spec/main.js
     - coffee/spec
+    - js/spec
 
 # Paths to fixture files (optional)
 # The fixture path will be set automatically when using jasmine-jquery.

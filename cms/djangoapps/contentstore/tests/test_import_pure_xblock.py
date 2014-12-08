@@ -7,8 +7,10 @@ from xblock.fields import String
 
 from xmodule.modulestore.xml_importer import import_from_xml
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
-from xmodule.modulestore.django import modulestore
 from xmodule.modulestore.mongo.draft import as_draft
+from django.conf import settings
+
+TEST_DATA_DIR = settings.COMMON_TEST_DATA_ROOT
 
 
 class StubXBlock(XBlock):
@@ -27,9 +29,6 @@ class StubXBlock(XBlock):
 
 
 class XBlockImportTest(ModuleStoreTestCase):
-
-    def setUp(self):
-        self.store = modulestore()
 
     @XBlock.register_temp_plugin(StubXBlock)
     def test_import_public(self):
@@ -61,8 +60,8 @@ class XBlockImportTest(ModuleStoreTestCase):
                 the expected field value set.
 
         """
-        _, courses = import_from_xml(
-            self.store, '**replace_user**', 'common/test/data', [course_dir]
+        courses = import_from_xml(
+            self.store, self.user.id, TEST_DATA_DIR, [course_dir]
         )
 
         xblock_location = courses[0].id.make_usage_key('stubxblock', 'xblock_test')

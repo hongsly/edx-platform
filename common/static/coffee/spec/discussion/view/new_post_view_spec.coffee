@@ -1,79 +1,164 @@
 # -*- coding: utf-8 -*-
 describe "NewPostView", ->
     beforeEach ->
-        setFixtures(
-            """
-            <article class="new-post-article" style="display: block;">
-                <div class="inner-wrapper">
-                    <form class="new-post-form">
-                        <div class="left-column" >
-                            <div class="form-topic-drop">
-                                <a href="#" aria-labelledby="topic-dropdown-label" class="topic_dropdown_button">… / TA Feedba …
-                                    <span class="drop-arrow">▾</span></a>
-
-                                <div class="topic_menu_wrapper">
-                                    <ul class="topic_menu" role="menu">
-                                        <li role="menuitem">
-                                            <a href="#"><span class="category-menu-span">Basic Question Types</span></a>
-                                            <ul role="menu">
-                                                <li role="menuitem"><a href="#" class="topic"
-                                                                       data-discussion_id="a22e81688d154e059f9a2012a26b27af"
-                                                                       aria-describedby="topic-name-span-a22e81688d154e059f9a2012a26b27af"
-                                                                       cohorted="False">Selection from Options</a></li>
-                                            </ul>
-                                        </li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-            </article>
-            """
-        )
+        DiscussionSpecHelper.setUpGlobals()
+        DiscussionSpecHelper.setUnderscoreFixtures()
         window.$$course_id = "edX/999/test"
-        spyOn(DiscussionUtil, "makeWmdEditor")
-        @discussion = new Discussion([], {pages: 1})
-        @view = new NewPostView(
-          el: $(".new-post-article"),
-          collection: @discussion,
+        spyOn(DiscussionUtil, "makeWmdEditor").andCallFake(
+          ($content, $local, cls_identifier) ->
+            $local("." + cls_identifier).html("<textarea></textarea>")
         )
-        @parent_category_text = @view.$el.find( "ul.topic_menu li[role='menuitem'] > a" )[0].text
-        @selected_option_text = @view.$el.find( "ul.topic_menu li[role='menuitem'] > a" )[1].text
+        @discussion = new Discussion([], {pages: 1})
 
-    describe "Drop down works correct", ->
+    describe "cohort selector", ->
+      beforeEach ->
+        @course_settings = new DiscussionCourseSettings({
+          "category_map": {
+            "children": ["Topic"],
+            "entries": {"Topic": {"is_cohorted": true, "id": "topic"}}
+          },
+          "allow_anonymous": false,
+          "allow_anonymous_to_peers": false,
+          "is_cohorted": true,
+          "cohorts": [
+            {"id": 1, "name": "Cohort1"},
+            {"id": 2, "name": "Cohort2"}
+          ]
+        })
+        @view = new NewPostView(
+          el: $("#fixture-element"),
+          collection: @discussion,
+          course_settings: @course_settings,
+          mode: "tab"
+        )
 
-      it "completely show parent category and sub-category", ->
-        complete_text = @parent_category_text + " / " + @selected_option_text
-        selected_text_width = @view.getNameWidth(complete_text)
-        @view.maxNameWidth = selected_text_width + 1
-        @view.$el.find( "ul.topic_menu li[role='menuitem'] > a" )[1].click()
-        dropdown_text = @view.$el.find(".form-topic-drop > a").text()
-        expect(complete_text+' ▾').toEqual(dropdown_text)
+      checkVisibility = (view, expectedVisible) =>
+        view.render()
+        expect(view.$(".js-group-select").is(":visible")).toEqual(expectedVisible)
+        if expectedVisible
+          expect(view.$(".js-group-select").prop("disabled")).toEqual(false)
 
-      it "completely show just sub-category", ->
-        complete_text = @parent_category_text + " / " + @selected_option_text
-        selected_text_width = @view.getNameWidth(complete_text)
-        @view.maxNameWidth = selected_text_width - 10
-        @view.$el.find( "ul.topic_menu li[role='menuitem'] > a" )[1].click()
-        dropdown_text = @view.$el.find(".form-topic-drop > a").text()
-        expect(dropdown_text.indexOf("…")).toEqual(0)
-        expect(dropdown_text).toContain(@selected_option_text)
+      it "is not visible to students", ->
+        checkVisibility(@view, false)
 
-      it "partially show sub-category", ->
-        parent_width = @view.getNameWidth(@parent_category_text)
-        complete_text = @parent_category_text + " / " + @selected_option_text
-        selected_text_width = @view.getNameWidth(complete_text)
-        @view.maxNameWidth = selected_text_width - parent_width
-        @view.$el.find( "ul.topic_menu li[role='menuitem'] > a" )[1].click()
-        dropdown_text = @view.$el.find(".form-topic-drop > a").text()
-        expect(dropdown_text.indexOf("…")).toEqual(0)
-        expect(dropdown_text.lastIndexOf("…")).toBeGreaterThan(0)
+      it "allows TAs to see the cohort selector", ->
+        DiscussionSpecHelper.makeTA()
+        checkVisibility(@view, true)
 
-      it "broken span doesn't occur", ->
-        complete_text = @parent_category_text + " / " + @selected_option_text
-        selected_text_width = @view.getNameWidth(complete_text)
-        @view.maxNameWidth = @view.getNameWidth(@selected_option_text) + 100
-        @view.$el.find( "ul.topic_menu li[role='menuitem'] > a" )[1].click()
-        dropdown_text = @view.$el.find(".form-topic-drop > a").text()
-        expect(dropdown_text.indexOf("/ span>")).toEqual(-1)
+      it "allows moderators to see the cohort selector", ->
+        DiscussionSpecHelper.makeModerator()
+        checkVisibility(@view, true)
+
+      it "allows the user to make a cohort selection", ->
+        DiscussionSpecHelper.makeModerator()
+        @view.render()
+        expectedGroupId = null
+        DiscussionSpecHelper.makeAjaxSpy(
+          (params) -> expect(params.data.group_id).toEqual(expectedGroupId)
+        )
+
+        _.each(
+          ["1", "2", ""],
+          (groupIdStr) =>
+            expectedGroupId = groupIdStr
+            @view.$(".js-group-select").val(groupIdStr)
+            @view.$(".js-post-title").val("dummy title")
+            @view.$(".js-post-body textarea").val("dummy body")
+            @view.$(".forum-new-post-form").submit()
+            expect($.ajax).toHaveBeenCalled()
+            $.ajax.reset()
+        )
+
+    describe "cancel post resets form ", ->
+      beforeEach ->
+        @course_settings = new DiscussionCourseSettings({
+          "allow_anonymous_to_peers":true,
+          "allow_anonymous":true,
+          "category_map": {
+            "subcategories": {
+              "Week 1": {
+                "subcategories": {},
+                "children": [
+                  "Topic-Level Student-Visible Label"
+                ],
+                "entries": {
+                  "Topic-Level Student-Visible Label": {
+                    "sort_key": null,
+                    "is_cohorted": false,
+                    "id": "2b3a858d0c884eb4b272dbbe3f2ffddd"
+                  }
+                }
+              }
+            },
+            "children": [
+              "General",
+              "Week 1"
+            ],
+            "entries": {
+              "General": {
+                "sort_key": "General",
+                "is_cohorted": false,
+                "id": "i4x-waqastest-waqastest-course-waqastest"
+              }
+            }
+          }
+        })
+
+      checkPostCancelReset = (mode, discussion, course_settings) ->
+        view = new NewPostView(
+          el: $("#fixture-element"),
+          collection: discussion,
+          course_settings: course_settings,
+          mode: mode
+        )
+        view.render()
+        eventSpy = jasmine.createSpy('eventSpy')
+        view.listenTo(view, "newPost:cancel", eventSpy)
+        view.$(".post-errors").html("<li class='post-error'>Title can't be empty</li>")
+        view.$("label[for$='post-type-discussion']").click()
+        view.$(".js-post-title").val("Test Title")
+        view.$(".js-post-body textarea").val("Test body")
+        view.$(".wmd-preview p").html("Test body")
+        view.$(".js-follow").prop("checked", false)
+        view.$(".js-anon").prop("checked", true)
+        view.$(".js-anon-peers").prop("checked", true)
+        if mode == "tab"
+          view.$("a[data-discussion-id='2b3a858d0c884eb4b272dbbe3f2ffddd']").click()
+        view.$(".cancel").click()
+        expect(eventSpy).toHaveBeenCalled()
+        expect(view.$(".post-errors").html()).toEqual("");
+        expect($("input[id$='post-type-question']")).toBeChecked()
+        expect($("input[id$='post-type-discussion']")).not.toBeChecked()
+        expect(view.$(".js-post-title").val()).toEqual("");
+        expect(view.$(".js-post-body textarea").val()).toEqual("");
+        expect(view.$(".js-follow")).toBeChecked()
+        expect(view.$(".js-anon")).not.toBeChecked()
+        expect(view.$(".js-anon-peers")).not.toBeChecked()
+        if mode == "tab"
+          expect(view.$(".js-selected-topic").text()).toEqual("General")
+
+      _.each(["tab", "inline"], (mode) =>
+        it "resets the form in #{mode} mode", ->
+          checkPostCancelReset(mode, @discussion, @course_settings)
+      )
+
+    it "posts to the correct URL", ->
+      topicId = "test_topic"
+      spyOn($, "ajax").andCallFake(
+        (params) ->
+          expect(params.url.path()).toEqual(DiscussionUtil.urlFor("create_thread", topicId))
+          {always: ->}
+      )
+      view = new NewPostView(
+        el: $("#fixture-element"),
+        collection: @discussion,
+        course_settings: new DiscussionCourseSettings({
+          allow_anonymous: false,
+          allow_anonymous_to_peers: false
+        }),
+        mode: "inline",
+        topicId: topicId
+      )
+      view.render()
+      view.$(".forum-new-post-form").submit()
+      expect($.ajax).toHaveBeenCalled()

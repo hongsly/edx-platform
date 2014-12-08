@@ -5,11 +5,13 @@ Module for code that should run during LMS startup
 from django.conf import settings
 
 # Force settings to run so that the python path is modified
-settings.INSTALLED_APPS  # pylint: disable=W0104
+settings.INSTALLED_APPS  # pylint: disable=pointless-statement
 
 from django_startup import autostartup
 import edxmako
 import logging
+from monkey_patch import django_utils_translation
+import analytics
 
 log = logging.getLogger(__name__)
 
@@ -18,7 +20,11 @@ def run():
     """
     Executed during django startup
     """
+    django_utils_translation.patch()
+
     autostartup()
+
+    add_mimetypes()
 
     if settings.FEATURES.get('USE_CUSTOM_THEME', False):
         enable_theme()
@@ -28,6 +34,25 @@ def run():
 
     if settings.FEATURES.get('ENABLE_THIRD_PARTY_AUTH', False):
         enable_third_party_auth()
+
+    # Initialize Segment.io analytics module. Flushes first time a message is received and
+    # every 50 messages thereafter, or if 10 seconds have passed since last flush
+    if settings.FEATURES.get('SEGMENT_IO_LMS') and hasattr(settings, 'SEGMENT_IO_LMS_KEY'):
+        analytics.init(settings.SEGMENT_IO_LMS_KEY, flush_at=50)
+
+
+def add_mimetypes():
+    """
+    Add extra mimetypes. Used in xblock_resource.
+
+    If you add a mimetype here, be sure to also add it in cms/startup.py.
+    """
+    import mimetypes
+
+    mimetypes.add_type('application/vnd.ms-fontobject', '.eot')
+    mimetypes.add_type('application/x-font-opentype', '.otf')
+    mimetypes.add_type('application/x-font-ttf', '.ttf')
+    mimetypes.add_type('application/font-woff', '.woff')
 
 
 def enable_theme():
@@ -59,6 +84,9 @@ def enable_theme():
     settings.STATICFILES_DIRS.append(
         (u'themes/{}'.format(settings.THEME_NAME), theme_root / 'static')
     )
+
+    # Include theme locale path for django translations lookup
+    settings.LOCALE_PATHS = (theme_root / 'conf/locale',) + settings.LOCALE_PATHS
 
 
 def enable_microsites():

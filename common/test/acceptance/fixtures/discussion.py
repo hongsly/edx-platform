@@ -30,6 +30,9 @@ class ContentFactory(factory.Factory):
 
 
 class Thread(ContentFactory):
+    thread_type = "discussion"
+    anonymous = False
+    anonymous_to_peers = False
     comments_count = 0
     unread_comments_count = 0
     title = "dummy thread title"
@@ -38,6 +41,7 @@ class Thread(ContentFactory):
     group_id = None
     pinned = False
     read = False
+
 
 class Comment(ContentFactory):
     thread_id = None
@@ -85,7 +89,13 @@ class SingleThreadViewFixture(DiscussionContentFixture):
 
     def addResponse(self, response, comments=[]):
         response['children'] = comments
-        self.thread.setdefault('children', []).append(response)
+        if self.thread["thread_type"] == "discussion":
+            responseListAttr = "children"
+        elif response["endorsed"]:
+            responseListAttr = "endorsed_responses"
+        else:
+            responseListAttr = "non_endorsed_responses"
+        self.thread.setdefault(responseListAttr, []).append(response)
         self.thread['comments_count'] += len(comments) + 1
 
     def _get_comment_map(self):

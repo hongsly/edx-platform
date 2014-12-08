@@ -6,35 +6,107 @@ In this way, courses can be served up both - say - XMLModuleStore or MongoModule
 """
 
 import logging
-from uuid import uuid4
 from contextlib import contextmanager
+import itertools
+import functools
+from contracts import contract, new_contract
+
 from opaque_keys import InvalidKeyError
+from opaque_keys.edx.keys import CourseKey, AssetKey
+from opaque_keys.edx.locator import LibraryLocator
+from opaque_keys.edx.locations import SlashSeparatedCourseKey
+from xmodule.assetstore import AssetMetadata
 
 from . import ModuleStoreWriteBase
-from xmodule.modulestore import PublishState
-from xmodule.modulestore.django import create_modulestore_instance, loc_mapper
-from opaque_keys.edx.locator import CourseLocator, BlockUsageLocator
-from xmodule.modulestore.exceptions import ItemNotFoundError
-from opaque_keys.edx.keys import CourseKey, UsageKey
-from xmodule.modulestore.mongo.base import MongoModuleStore
-from xmodule.modulestore.split_mongo.split import SplitMongoModuleStore
-from opaque_keys.edx.locations import SlashSeparatedCourseKey
-import itertools
+from . import ModuleStoreEnum
+from .exceptions import ItemNotFoundError, DuplicateCourseError
+from .draft_and_published import ModuleStoreDraftAndPublished
+from .split_migrator import SplitMigrator
 
+new_contract('CourseKey', CourseKey)
+new_contract('AssetKey', AssetKey)
+new_contract('AssetMetadata', AssetMetadata)
+new_contract('LibraryLocator', LibraryLocator)
 
 log = logging.getLogger(__name__)
 
 
-class MixedModuleStore(ModuleStoreWriteBase):
+def strip_key(func):
+    """
+    A decorator for stripping version and branch information from return values that are, or contain, UsageKeys or
+    CourseKeys.
+    Additionally, the decorated function is called with an optional 'field_decorator' parameter that can be used
+    to strip any location(-containing) fields, which are not directly returned by the function.
+
+    The behavior can be controlled by passing 'remove_version' and 'remove_branch' booleans to the decorated
+    function's kwargs.
+    """
+    @functools.wraps(func)
+    def inner(*args, **kwargs):
+        """
+        Supported kwargs:
+            remove_version - If True, calls 'version_agnostic' on all return values, including those in lists and dicts.
+            remove_branch - If True, calls 'for_branch(None)' on all return values, including those in lists and dicts.
+            Note: The 'field_decorator' parameter passed to the decorated function is a function that honors the
+            values of these kwargs.
+        """
+
+        # remove version and branch, by default
+        rem_vers = kwargs.pop('remove_version', True)
+        rem_branch = kwargs.pop('remove_branch', True)
+
+        # helper function for stripping individual values
+        def strip_key_func(val):
+            """
+            Strips the version and branch information according to the settings of rem_vers and rem_branch.
+            Recursively calls this function if the given value has a 'location' attribute.
+            """
+            retval = val
+            if rem_vers and hasattr(retval, 'version_agnostic'):
+                retval = retval.version_agnostic()
+            if rem_branch and hasattr(retval, 'for_branch'):
+                retval = retval.for_branch(None)
+            if hasattr(retval, 'location'):
+                retval.location = strip_key_func(retval.location)
+            return retval
+
+        # function for stripping both, collection of, and individual, values
+        def strip_key_collection(field_value):
+            """
+            Calls strip_key_func for each element in the given value.
+            """
+            if rem_vers or rem_branch:
+                if isinstance(field_value, list):
+                    field_value = [strip_key_func(fv) for fv in field_value]
+                elif isinstance(field_value, dict):
+                    for key, val in field_value.iteritems():
+                        field_value[key] = strip_key_func(val)
+                else:
+                    field_value = strip_key_func(field_value)
+            return field_value
+
+        # call the decorated function
+        retval = func(field_decorator=strip_key_collection, *args, **kwargs)
+
+        # strip the return value
+        return strip_key_collection(retval)
+
+    return inner
+
+
+class MixedModuleStore(ModuleStoreDraftAndPublished, ModuleStoreWriteBase):
     """
     ModuleStore knows how to route requests to the right persistence ms
     """
-    def __init__(self, mappings, stores, i18n_service=None, **kwargs):
+    def __init__(self, contentstore, mappings, stores, i18n_service=None, fs_service=None, create_modulestore_instance=None, **kwargs):
         """
         Initialize a MixedModuleStore. Here we look into our passed in kwargs which should be a
         collection of other modulestore configuration information
         """
-        super(MixedModuleStore, self).__init__(**kwargs)
+        super(MixedModuleStore, self).__init__(contentstore, **kwargs)
+
+        if create_modulestore_instance is None:
+            raise ValueError('MixedModuleStore constructor must be passed a create_modulestore_instance function')
 
         self.modulestores = []
         self.mappings = {}
@@ -61,12 +133,12 @@ class MixedModuleStore(ModuleStoreWriteBase):
                 ]
             store = create_modulestore_instance(
                 store_settings['ENGINE'],
+                self.contentstore,
                 store_settings.get('DOC_STORE_CONFIG', {}),
                 store_settings.get('OPTIONS', {}),
                 i18n_service=i18n_service,
+                fs_service=fs_service,
             )
-            if key == 'split':
-                store.loc_mapper = loc_mapper()
             # replace all named pointers to the store into actual pointers
             for course_key, store_name in self.mappings.iteritems():
                 if store_name == key:
@@ -82,8 +154,8 @@ class MixedModuleStore(ModuleStoreWriteBase):
         """
         if hasattr(course_id, 'version_agnostic'):
             course_id = course_id.version_agnostic()
-        if hasattr(course_id, 'branch_agnostic'):
-            course_id = course_id.branch_agnostic()
+        if hasattr(course_id, 'branch'):
+            course_id = course_id.replace(branch=None)
         return course_id
 
     def _get_modulestore_for_courseid(self, course_id=None):
@@ -100,26 +172,32 @@ class MixedModuleStore(ModuleStoreWriteBase):
                 return mapping
             else:
                 for store in self.modulestores:
-                    if isinstance(course_id, store.reference_type) and store.has_course(course_id):
+                    if store.has_course(course_id):
                         self.mappings[course_id] = store
                         return store
 
-        # return the first store, as the default
-        return self.modulestores[0]
+        # return the default store
+        return self.default_modulestore
 
     def _get_modulestore_by_type(self, modulestore_type):
         """
         This method should only really be used by tests and migration scripts when necessary.
-        Returns the module store as requested by type.  The type can be:
-
-            SPLIT_MONGO_MODULESTORE_TYPE
-            MONGO_MODULESTORE_TYPE
-            XML_MODULESTORE_TYPE
+        Returns the module store as requested by type.  The type can be a value from ModuleStoreEnum.Type.
         """
         for store in self.modulestores:
             if store.get_modulestore_type() == modulestore_type:
                 return store
         return None
+
+    def fill_in_run(self, course_key):
+        """
+        Some course_keys are used without runs. This function calls the corresponding
+        fill_in_run function on the appropriate modulestore.
+        """
+        store = self._get_modulestore_for_courseid(course_key)
+        if not hasattr(store, 'fill_in_run'):
+            return course_key
+        return store.fill_in_run(course_key)
 
     def has_item(self, usage_key, **kwargs):
         """
@@ -128,15 +206,16 @@ class MixedModuleStore(ModuleStoreWriteBase):
         store = self._get_modulestore_for_courseid(usage_key.course_key)
         return store.has_item(usage_key, **kwargs)
 
+    @strip_key
     def get_item(self, usage_key, depth=0, **kwargs):
         """
-        This method is explicitly not implemented as we need a course_id to disambiguate
-        We should be able to fix this when the data-model rearchitecting is done
+        see parent doc
         """
         store = self._get_modulestore_for_courseid(usage_key.course_key)
         return store.get_item(usage_key, depth, **kwargs)
 
-    def get_items(self, course_key, settings=None, content=None, **kwargs):
+    @strip_key
+    def get_items(self, course_key, **kwargs):
         """
         Returns:
             list of XModuleDescriptor instances for the matching items within the course with
@@ -147,63 +226,76 @@ class MixedModuleStore(ModuleStoreWriteBase):
 
         Args:
             course_key (CourseKey): the course identifier
-            settings (dict): fields to look for which have settings scope. Follows same syntax
-                and rules as kwargs below
-            content (dict): fields to look for which have content scope. Follows same syntax and
-                rules as kwargs below.
-            kwargs (key=value): what to look for within the course.
-                Common qualifiers are ``category`` or any field name. if the target field is a list,
-                then it searches for the given value in the list not list equivalence.
-                Substring matching pass a regex object.
-                For some modulestores, ``name`` is another commonly provided key (Location based stores)
-                For some modulestores,
-                you can search by ``edited_by``, ``edited_on`` providing either a datetime for == (probably
-                useless) or a function accepting one arg to do inequality
+            kwargs:
+                settings (dict): fields to look for which have settings scope. Follows same syntax
+                    and rules as kwargs below
+                content (dict): fields to look for which have content scope. Follows same syntax and
+                    rules as kwargs below.
+                qualifiers (dict): what to look for within the course.
+                    Common qualifiers are ``category`` or any field name. if the target field is a list,
+                    then it searches for the given value in the list not list equivalence.
+                    Substring matching pass a regex object.
+                    For some modulestores, ``name`` is another commonly provided key (Location based stores)
+                    For some modulestores,
+                    you can search by ``edited_by``, ``edited_on`` providing either a datetime for == (probably
+                    useless) or a function accepting one arg to do inequality
         """
         if not isinstance(course_key, CourseKey):
             raise Exception("Must pass in a course_key when calling get_items()")
 
         store = self._get_modulestore_for_courseid(course_key)
-        return store.get_items(course_key, settings, content, **kwargs)
+        return store.get_items(course_key, **kwargs)
 
-    def get_courses(self):
+    @strip_key
+    def get_courses(self, **kwargs):
         '''
         Returns a list containing the top level XModuleDescriptors of the courses in this modulestore.
         '''
-        courses = {}  # a dictionary of course keys to course objects
-
-        # first populate with the ones in mappings as the mapping override discovery
-        for course_id, store in self.mappings.iteritems():
-            course = store.get_course(course_id)
-            # check if the course is not None - possible if the mappings file is outdated
-            # TODO - log an error if the course is None, but move it to an initialization method to keep it less noisy
-            if course is not None:
-                courses[course_id] = store.get_course(course_id)
-
-        has_locators = any(issubclass(CourseLocator, store.reference_type) for store in self.modulestores)
+        courses = {}
         for store in self.modulestores:
-
             # filter out ones which were fetched from earlier stores but locations may not be ==
-            for course in store.get_courses():
+            for course in store.get_courses(**kwargs):
                 course_id = self._clean_course_id_for_mapping(course.id)
                 if course_id not in courses:
-                    if has_locators and isinstance(course_id, SlashSeparatedCourseKey):
-
-                        # see if a locator version of course is in the result
-                        try:
-                            course_locator = loc_mapper().translate_location_to_course_locator(course_id)
-                            if course_locator in courses:
-                                continue
-                        except ItemNotFoundError:
-                            # if there's no existing mapping, then the course can't have been in split
-                            pass
-
                     # course is indeed unique. save it in result
                     courses[course_id] = course
-
         return courses.values()
 
-    def get_course(self, course_key, depth=0):
+    @strip_key
+    def get_libraries(self, **kwargs):
+        """
+        Returns a list containing the top level XBlock of the libraries (LibraryRoot) in this modulestore.
+        """
+        libraries = {}
+        for store in self.modulestores:
+            if not hasattr(store, 'get_libraries'):
+                continue
+            # filter out ones which were fetched from earlier stores but locations may not be ==
+            for course in store.get_libraries(**kwargs):
+                course_id = self._clean_course_id_for_mapping(course.location)
+                if course_id not in libraries:
+                    # course is indeed unique. save it in result
+                    libraries[course_id] = course
+        return libraries.values()
+
+    def make_course_key(self, org, course, run):
+        """
+        Return a valid :class:`~opaque_keys.edx.keys.CourseKey` for this modulestore
+        that matches the supplied `org`, `course`, and `run`.
+
+        This key may represent a course that doesn't exist in this modulestore.
+        """
+        # If there is a mapping that match this org/course/run, use that
+        for course_id, store in self.mappings.iteritems():
+            candidate_key = store.make_course_key(org, course, run)
+            if candidate_key == course_id:
+                return candidate_key
+
+        # Otherwise, return the key created by the default store
+        return self.default_modulestore.make_course_key(org, course, run)
+
+    @strip_key
+    def get_course(self, course_key, depth=0, **kwargs):
         """
         returns the course module associated with the course_id. If no such course exists,
         it returns None
@@ -213,11 +305,30 @@ class MixedModuleStore(ModuleStoreWriteBase):
         assert(isinstance(course_key, CourseKey))
         store = self._get_modulestore_for_courseid(course_key)
         try:
-            return store.get_course(course_key, depth=depth)
+            return store.get_course(course_key, depth=depth, **kwargs)
         except ItemNotFoundError:
             return None
 
-    def has_course(self, course_id, ignore_case=False):
+    @strip_key
+    @contract(library_key='LibraryLocator')
+    def get_library(self, library_key, depth=0, **kwargs):
+        """
+        returns the library block associated with the given key. If no such library exists,
+        it returns None
+
+        :param library_key: must be a LibraryLocator
+        """
+        try:
+            store = self._verify_modulestore_support(library_key, 'get_library')
+            return store.get_library(library_key, depth=depth, **kwargs)
+        except NotImplementedError:
+            log.exception("Modulestore configured for %s does not have get_library method", library_key)
+            return None
+        except ItemNotFoundError:
+            return None
+
+    @strip_key
+    def has_course(self, course_id, ignore_case=False, **kwargs):
         """
         returns the course_id of the course if it was found, else None
         Note: we return the course_id instead of a boolean here since the found course may have
@@ -230,19 +341,143 @@ class MixedModuleStore(ModuleStoreWriteBase):
         """
         assert(isinstance(course_id, CourseKey))
         store = self._get_modulestore_for_courseid(course_id)
-        return store.has_course(course_id, ignore_case)
+        return store.has_course(course_id, ignore_case, **kwargs)
 
-    def delete_course(self, course_key, user_id=None):
+    def delete_course(self, course_key, user_id):
         """
         See xmodule.modulestore.__init__.ModuleStoreWrite.delete_course
         """
         assert(isinstance(course_key, CourseKey))
         store = self._get_modulestore_for_courseid(course_key)
-        if hasattr(store, 'delete_course'):
-            return store.delete_course(course_key, user_id)
-        else:
-            raise NotImplementedError(u"Cannot delete a course on store {}".format(store))
+        return store.delete_course(course_key, user_id)
 
+    @contract(asset_metadata='AssetMetadata')
+    def save_asset_metadata(self, asset_metadata, user_id):
+        """
+        Saves the asset metadata for a particular course's asset.
+
+        Args:
+        course_key (CourseKey): course identifier
+        asset_metadata (AssetMetadata): data about the course asset data
+        """
+        store = self._get_modulestore_for_courseid(asset_metadata.asset_id.course_key)
+        return store.save_asset_metadata(asset_metadata, user_id)
+
+    @strip_key
+    @contract(asset_key='AssetKey')
+    def find_asset_metadata(self, asset_key, **kwargs):
+        """
+        Find the metadata for a particular course asset.
+
+        Args:
+            asset_key (AssetKey): locator containing original asset filename
+
+        Returns:
+            asset metadata (AssetMetadata) -or- None if not found
+        """
+        store = self._get_modulestore_for_courseid(asset_key.course_key)
+        return store.find_asset_metadata(asset_key, **kwargs)
+
+    @strip_key
+    @contract(course_key='CourseKey', start=int, maxresults=int, sort='tuple|None')
+    def get_all_asset_metadata(self, course_key, asset_type, start=0, maxresults=-1, sort=None, **kwargs):
+        """
+        Returns a list of static assets for a course.
+        By default all assets are returned, but start and maxresults can be provided to limit the query.
+
+        Args:
+            course_key (CourseKey): course identifier
+            start (int): optional - start at this asset number
+            maxresults (int): optional - return at most this many, -1 means no limit
+            sort (array): optional - None means no sort
+                (sort_by (str), sort_order (str))
+                sort_by - one of 'uploadDate' or 'displayname'
+                sort_order - one of 'ascending' or 'descending'
+
+        Returns:
+            List of asset data dictionaries, which have the following keys:
+                asset_key (AssetKey): asset identifier
+                displayname: The human-readable name of the asset
+                uploadDate (datetime.datetime): The date and time that the file was uploaded
+                contentType: The mimetype string of the asset
+                md5: An md5 hash of the asset content
+        """
+        store = self._get_modulestore_for_courseid(course_key)
+        return store.get_all_asset_metadata(course_key, asset_type, start, maxresults, sort, **kwargs)
+
+    @contract(asset_key='AssetKey')
+    def delete_asset_metadata(self, asset_key, user_id):
+        """
+        Deletes a single asset's metadata.
+
+        Arguments:
+            asset_id (AssetKey): locator containing original asset filename
+
+        Returns:
+            Number of asset metadata entries deleted (0 or 1)
+        """
+        store = self._get_modulestore_for_courseid(asset_key.course_key)
+        return store.delete_asset_metadata(asset_key, user_id)
+
+    @contract(source_course_key='CourseKey', dest_course_key='CourseKey')
+    def copy_all_asset_metadata(self, source_course_key, dest_course_key, user_id):
+        """
+        Copy all the course assets from source_course_key to dest_course_key.
+
+        Arguments:
+            source_course_key (CourseKey): identifier of course to copy from
+            dest_course_key (CourseKey): identifier of course to copy to
+        """
+        source_store = self._get_modulestore_for_courseid(source_course_key)
+        dest_store = self._get_modulestore_for_courseid(dest_course_key)
+        if source_store != dest_store:
+            with self.bulk_operations(dest_course_key):
+                # Get all the asset metadata in the source course.
+                all_assets = source_store.get_all_asset_metadata(source_course_key, 'asset')
+                # Store it all in the dest course.
+                for asset in all_assets:
+                    new_asset_key = dest_course_key.make_asset_key('asset', asset.asset_id.path)
+                    copied_asset = AssetMetadata(new_asset_key)
+                    copied_asset.from_storable(asset.to_storable())
+                    dest_store.save_asset_metadata(copied_asset, user_id)
+        else:
+            # Courses in the same modulestore can be handled by the modulestore itself.
+            source_store.copy_all_asset_metadata(source_course_key, dest_course_key, user_id)
+
+    @contract(asset_key='AssetKey', attr=str)
+    def set_asset_metadata_attr(self, asset_key, attr, value, user_id):
+        """
+        Add/set the given attr on the asset at the given location. Value can be any type which pymongo accepts.
+
+        Arguments:
+            asset_key (AssetKey): asset identifier
+            attr (str): which attribute to set
+            value: the value to set it to (any type pymongo accepts such as datetime, number, string)
+
+        Raises:
+            NotFoundError if no such item exists
+            AttributeError is attr is one of the build in attrs.
+        """
+        store = self._get_modulestore_for_courseid(asset_key.course_key)
+        return store.set_asset_metadata_attrs(asset_key, {attr: value}, user_id)
+
+    @contract(asset_key='AssetKey', attr_dict=dict)
+    def set_asset_metadata_attrs(self, asset_key, attr_dict, user_id):
+        """
+        Add/set the given dict of attrs on the asset at the given location. Value can be any type which pymongo accepts.
+
+        Arguments:
+            asset_key (AssetKey): asset identifier
+            attr_dict (dict): attribute/value pairs to set
+
+        Raises:
+            NotFoundError if no such item exists
+            AttributeError is attr is one of the build in attrs.
+        """
+        store = self._get_modulestore_for_courseid(asset_key.course_key)
+        return store.set_asset_metadata_attrs(asset_key, attr_dict, user_id)
+
+    @strip_key
     def get_parent_location(self, location, **kwargs):
         """
         returns the parent locations for a given location
@@ -260,14 +495,15 @@ class MixedModuleStore(ModuleStoreWriteBase):
         """
         return self._get_modulestore_for_courseid(course_id).get_modulestore_type()
 
-    def get_orphans(self, course_key):
+    @strip_key
+    def get_orphans(self, course_key, **kwargs):
         """
         Get all of the xblocks in the given course which have no parents and are not of types which are
         usually orphaned. NOTE: may include xblocks which still have references via xblocks which don't
         use children to point to their dependents.
         """
         store = self._get_modulestore_for_courseid(course_key)
-        return store.get_orphans(course_key)
+        return store.get_orphans(course_key, **kwargs)
 
     def get_errored_courses(self):
         """
@@ -279,117 +515,217 @@ class MixedModuleStore(ModuleStoreWriteBase):
             errs.update(store.get_errored_courses())
         return errs
 
-    def create_course(self, org, offering, user_id=None, fields=None, **kwargs):
+    @strip_key
+    def create_course(self, org, course, run, user_id, **kwargs):
         """
         Creates and returns the course.
 
         Args:
             org (str): the organization that owns the course
-            offering (str): the name of the course offering
+            course (str): the name of the course
+            run (str): the name of the run
             user_id: id of the user creating the course
             fields (dict): Fields to set on the course at initialization
             kwargs: Any optional arguments understood by a subset of modulestores to customize instantiation
 
         Returns: a CourseDescriptor
         """
-        store = self._get_modulestore_for_courseid(None)
+        # first make sure an existing course doesn't already exist in the mapping
+        course_key = self.make_course_key(org, course, run)
+        if course_key in self.mappings:
+            raise DuplicateCourseError(course_key, course_key)
 
-        if not hasattr(store, 'create_course'):
-            raise NotImplementedError(u"Cannot create a course on store {}".format(store))
+        # create the course
+        store = self._verify_modulestore_support(None, 'create_course')
+        course = store.create_course(org, course, run, user_id, **kwargs)
 
-        return store.create_course(org, offering, user_id, fields, **kwargs)
+        # add new course to the mapping
+        self.mappings[course_key] = store
 
-    def create_item(self, course_or_parent_loc, category, user_id=None, **kwargs):
+        return course
+
+    @strip_key
+    def create_library(self, org, library, user_id, fields, **kwargs):
         """
-        Create and return the item. If parent_loc is a specific location v a course id,
-        it installs the new item as a child of the parent (if the parent_loc is a specific
-        xblock reference).
+        Creates and returns a new library.
 
-        :param course_or_parent_loc: Can be a CourseKey or UsageKey
-        :param category (str): The block_type of the item we are creating
+        Args:
+            org (str): the organization that owns the course
+            library (str): the code/number/name of the library
+            user_id: id of the user creating the course
+            fields (dict): Fields to set on the course at initialization - e.g. display_name
+            kwargs: Any optional arguments understood by a subset of modulestores to customize instantiation
+
+        Returns: a LibraryRoot
         """
-        # find the store for the course
-        course_id = getattr(course_or_parent_loc, 'course_key', course_or_parent_loc)
-        store = self._get_modulestore_for_courseid(course_id)
+        # first make sure an existing course/lib doesn't already exist in the mapping
+        lib_key = LibraryLocator(org=org, library=library)
+        if lib_key in self.mappings:
+            raise DuplicateCourseError(lib_key, lib_key)
 
-        location = kwargs.pop('location', None)
-        # invoke its create_item
-        if isinstance(store, MongoModuleStore):
-            block_id = kwargs.pop('block_id', getattr(location, 'name', uuid4().hex))
-            parent_loc = course_or_parent_loc if isinstance(course_or_parent_loc, UsageKey) else None
-            # must have a legitimate location, compute if appropriate
-            if location is None:
-                location = course_id.make_usage_key(category, block_id)
-            # do the actual creation
-            xblock = self.create_and_save_xmodule(location, user_id, **kwargs)
-            # don't forget to attach to parent
-            if parent_loc is not None and not 'detached' in xblock._class_tags:
-                parent = store.get_item(parent_loc)
-                parent.children.append(location)
-                store.update_item(parent)
-        elif isinstance(store, SplitMongoModuleStore):
-            if not isinstance(course_or_parent_loc, (CourseLocator, BlockUsageLocator)):
-                raise ValueError(u"Cannot create a child of {} in split. Wrong repr.".format(course_or_parent_loc))
+        # create the library
+        store = self._verify_modulestore_support(None, 'create_library')
+        library = store.create_library(org, library, user_id, fields, **kwargs)
 
-            # split handles all the fields in one dict not separated by scope
-            fields = kwargs.get('fields', {})
-            fields.update(kwargs.pop('metadata', {}))
-            fields.update(kwargs.pop('definition_data', {}))
-            kwargs['fields'] = fields
+        # add new library to the mapping
+        self.mappings[lib_key] = store
 
-            xblock = store.create_item(course_or_parent_loc, category, user_id, **kwargs)
+        return library
+
+    @strip_key
+    def clone_course(self, source_course_id, dest_course_id, user_id, fields=None, **kwargs):
+        """
+        See the superclass for the general documentation.
+
+        If cloning w/in a store, delegates to that store's clone_course which, in order to be self-
+        sufficient, should handle the asset copying (call the same method as this one does)
+        If cloning between stores,
+            * copy the assets
+            * migrate the courseware
+        """
+        source_modulestore = self._get_modulestore_for_courseid(source_course_id)
+        # for a temporary period of time, we may want to hardcode dest_modulestore as split if there's a split
+        # to have only course re-runs go to split. This code, however, uses the config'd priority
+        dest_modulestore = self._get_modulestore_for_courseid(dest_course_id)
+        if source_modulestore == dest_modulestore:
+            return source_modulestore.clone_course(source_course_id, dest_course_id, user_id, fields, **kwargs)
+
+        if dest_modulestore.get_modulestore_type() == ModuleStoreEnum.Type.split:
+            split_migrator = SplitMigrator(dest_modulestore, source_modulestore)
+            split_migrator.migrate_mongo_course(
+                source_course_id, user_id, dest_course_id.org, dest_course_id.course, dest_course_id.run, fields, **kwargs
+            )
+            # the super handles assets and any other necessities
+            super(MixedModuleStore, self).clone_course(source_course_id, dest_course_id, user_id, fields, **kwargs)
         else:
-            raise NotImplementedError(u"Cannot create an item on store %s" % store)
+            raise NotImplementedError("No code for cloning from {} to {}".format(
+                source_modulestore, dest_modulestore
+            ))
 
-        return xblock
+    @strip_key
+    def create_item(self, user_id, course_key, block_type, block_id=None, fields=None, **kwargs):
+        """
+        Creates and saves a new item in a course.
 
-    def update_item(self, xblock, user_id, allow_not_found=False):
+        Returns the newly created item.
+
+        Args:
+            user_id: ID of the user creating and saving the xmodule
+            course_key: A :class:`~opaque_keys.edx.CourseKey` identifying which course to create
+                this item in
+            block_type: The typo of block to create
+            block_id: a unique identifier for the new item. If not supplied,
+                a new identifier will be generated
+            fields (dict): A dictionary specifying initial values for some or all fields
+                in the newly created block
+        """
+        modulestore = self._verify_modulestore_support(course_key, 'create_item')
+        return modulestore.create_item(user_id, course_key, block_type, block_id=block_id, fields=fields, **kwargs)
+
+    @strip_key
+    def create_child(self, user_id, parent_usage_key, block_type, block_id=None, fields=None, **kwargs):
+        """
+        Creates and saves a new xblock that is a child of the specified block
+
+        Returns the newly created item.
+
+        Args:
+            user_id: ID of the user creating and saving the xmodule
+            parent_usage_key: a :class:`~opaque_key.edx.UsageKey` identifying the
+                block that this item should be parented under
+            block_type: The typo of block to create
+            block_id: a unique identifier for the new item. If not supplied,
+                a new identifier will be generated
+            fields (dict): A dictionary specifying initial values for some or all fields
+                in the newly created block
+        """
+        modulestore = self._verify_modulestore_support(parent_usage_key.course_key, 'create_child')
+        return modulestore.create_child(user_id, parent_usage_key, block_type, block_id=block_id, fields=fields, **kwargs)
+
+    @strip_key
+    def import_xblock(self, user_id, course_key, block_type, block_id, fields=None, runtime=None, **kwargs):
+        """
+        See :py:meth `ModuleStoreDraftAndPublished.import_xblock`
+
+        Defer to the course's modulestore if it supports this method
+        """
+        store = self._verify_modulestore_support(course_key, 'import_xblock')
+        return store.import_xblock(user_id, course_key, block_type, block_id, fields, runtime)
+
+    @strip_key
+    def update_item(self, xblock, user_id, allow_not_found=False, **kwargs):
         """
         Update the xblock persisted to be the same as the given for all types of fields
         (content, children, and metadata) attribute the change to the given user.
         """
-        store = self._verify_modulestore_support(xblock.location, 'update_item')
-        return store.update_item(xblock, user_id, allow_not_found)
+        store = self._verify_modulestore_support(xblock.location.course_key, 'update_item')
+        return store.update_item(xblock, user_id, allow_not_found, **kwargs)
 
-    def delete_item(self, location, user_id=None, **kwargs):
+    @strip_key
+    def delete_item(self, location, user_id, **kwargs):
         """
         Delete the given item from persistence. kwargs allow modulestore specific parameters.
         """
-        store = self._verify_modulestore_support(location, 'delete_item')
-        store.delete_item(location, user_id=user_id, **kwargs)
+        store = self._verify_modulestore_support(location.course_key, 'delete_item')
+        return store.delete_item(location, user_id=user_id, **kwargs)
+
+    def revert_to_published(self, location, user_id):
+        """
+        Reverts an item to its last published version (recursively traversing all of its descendants).
+        If no published version exists, an InvalidVersionError is thrown.
+
+        If a published version exists but there is no draft version of this item or any of its descendants, this
+        method is a no-op.
+
+        :raises InvalidVersionError: if no published version exists for the location specified
+        """
+        store = self._verify_modulestore_support(location.course_key, 'revert_to_published')
+        return store.revert_to_published(location, user_id)
 
     def close_all_connections(self):
         """
         Close all db connections
         """
-        for mstore in self.modulestores:
-            if hasattr(mstore, 'database'):
-                mstore.database.connection.close()
-            elif hasattr(mstore, 'db'):
-                mstore.db.connection.close()
+        for modulestore in self.modulestores:
+            modulestore.close_connections()
 
-    def create_xmodule(self, location, definition_data=None, metadata=None, runtime=None, fields={}):
+    def _drop_database(self):
+        """
+        A destructive operation to drop all databases and close all db connections.
+        Intended to be used by test code for cleanup.
+        """
+        for modulestore in self.modulestores:
+            # drop database if the store supports it (read-only stores do not)
+            if hasattr(modulestore, '_drop_database'):
+                modulestore._drop_database()  # pylint: disable=protected-access
+
+    @strip_key
+    def create_xblock(self, runtime, course_key, block_type, block_id=None, fields=None, **kwargs):
         """
         Create the new xmodule but don't save it. Returns the new module.
 
-        :param location: a Location--must have a category
-        :param definition_data: can be empty. The initial definition_data for the kvs
-        :param metadata: can be empty, the initial metadata for the kvs
-        :param runtime: if you already have an xblock from the course, the xblock.runtime value
-        :param fields: a dictionary of field names and values for the new xmodule
+        Args:
+            runtime: :py:class `xblock.runtime` from another xblock in the same course. Providing this
+                significantly speeds up processing (inheritance and subsequent persistence)
+            course_key: :py:class `opaque_keys.CourseKey`
+            block_type: :py:class `string`: the string identifying the xblock type
+            block_id: the string uniquely identifying the block within the given course
+            fields: :py:class `dict` field_name, value pairs for initializing the xblock fields. Values
+                should be the pythonic types not the json serialized ones.
         """
-        store = self._verify_modulestore_support(location, 'create_xmodule')
-        return store.create_xmodule(location, definition_data, metadata, runtime, fields)
+        store = self._verify_modulestore_support(course_key, 'create_xblock')
+        return store.create_xblock(runtime, course_key, block_type, block_id, fields or {}, **kwargs)
 
-    def get_courses_for_wiki(self, wiki_slug):
+    @strip_key
+    def get_courses_for_wiki(self, wiki_slug, **kwargs):
         """
         Return the list of courses which use this wiki_slug
         :param wiki_slug: the course wiki root slug
-        :return: list of course locations
+        :return: list of course keys
         """
         courses = []
         for modulestore in self.modulestores:
-            courses.extend(modulestore.get_courses_for_wiki(wiki_slug))
+            courses.extend(modulestore.get_courses_for_wiki(wiki_slug, **kwargs))
         return courses
 
     def heartbeat(self):
@@ -400,11 +736,11 @@ class MixedModuleStore(ModuleStoreWriteBase):
         return dict(
             itertools.chain.from_iterable(
                 store.heartbeat().iteritems()
-                for store in self.modulestores.itervalues()
+                for store in self.modulestores
             )
         )
 
-    def compute_publish_state(self, xblock):
+    def has_published_version(self, xblock):
         """
         Returns whether this xblock is draft, public, or private.
 
@@ -416,98 +752,115 @@ class MixedModuleStore(ModuleStoreWriteBase):
         """
         course_id = xblock.scope_ids.usage_id.course_key
         store = self._get_modulestore_for_courseid(course_id)
-        if hasattr(store, 'compute_publish_state'):
-            return store.compute_publish_state(xblock)
-        elif hasattr(store, 'publish'):
-            raise NotImplementedError(u"Cannot compute_publish_state on store {}".format(store))
-        else:
-            # read-only store; so, everything's public
-            return PublishState.public
+        return store.has_published_version(xblock)
 
-    def publish(self, location, user_id):
+    @strip_key
+    def publish(self, location, user_id, **kwargs):
         """
         Save a current draft to the underlying modulestore
         Returns the newly published item.
         """
-        store = self._verify_modulestore_support(location, 'publish')
-        return store.publish(location, user_id)
+        store = self._verify_modulestore_support(location.course_key, 'publish')
+        return store.publish(location, user_id, **kwargs)
 
-    def unpublish(self, location, user_id):
+    @strip_key
+    def unpublish(self, location, user_id, **kwargs):
         """
         Save a current draft to the underlying modulestore
         Returns the newly unpublished item.
         """
-        store = self._verify_modulestore_support(location, 'unpublish')
-        return store.unpublish(location, user_id)
+        store = self._verify_modulestore_support(location.course_key, 'unpublish')
+        return store.unpublish(location, user_id, **kwargs)
 
     def convert_to_draft(self, location, user_id):
         """
         Create a copy of the source and mark its revision as draft.
         Note: This method is to support the Mongo Modulestore and may be deprecated.
 
-        :param source: the location of the source (its revision must be None)
+        :param location: the location of the source (its revision must be None)
         """
-        store = self._verify_modulestore_support(location, 'convert_to_draft')
+        store = self._verify_modulestore_support(location.course_key, 'convert_to_draft')
         return store.convert_to_draft(location, user_id)
 
-    def _verify_modulestore_support(self, location, method):
+    def has_changes(self, xblock):
+        """
+        Checks if the given block has unpublished changes
+        :param xblock: the block to check
+        :return: True if the draft and published versions differ
+        """
+        store = self._verify_modulestore_support(xblock.location.course_key, 'has_changes')
+        return store.has_changes(xblock)
+
+    def _verify_modulestore_support(self, course_key, method):
         """
         Finds and returns the store that contains the course for the given location, and verifying
         that the store supports the given method.
 
         Raises NotImplementedError if the found store does not support the given method.
         """
-        course_id = location.course_key
-        store = self._get_modulestore_for_courseid(course_id)
+        store = self._get_modulestore_for_courseid(course_key)
         if hasattr(store, method):
             return store
         else:
             raise NotImplementedError(u"Cannot call {} on store {}".format(method, store))
 
+    @property
+    def default_modulestore(self):
+        """
+        Return the default modulestore
+        """
+        thread_local_default_store = getattr(self.thread_cache, 'default_store', None)
+        if thread_local_default_store:
+            # return the thread-local cache, if found
+            return thread_local_default_store
+        else:
+            # else return the default store
+            return self.modulestores[0]
 
-@contextmanager
-def store_branch_setting(store, branch_setting):
-    """
-    A context manager for temporarily setting a store's branch value
+    @contextmanager
+    def default_store(self, store_type):
+        """
+        A context manager for temporarily changing the default store in the Mixed modulestore to the given store type
+        """
+        # find the store corresponding to the given type
+        store = next((store for store in self.modulestores if store.get_modulestore_type() == store_type), None)
+        if not store:
+            raise Exception(u"Cannot find store of type {}".format(store_type))
 
-    Note: to be effective, the store must be a direct pointer to the underlying store;
-        not the intermediary Mixed store.
-    """
-    assert not isinstance(store, MixedModuleStore)
+        prev_thread_local_store = getattr(self.thread_cache, 'default_store', None)
+        try:
+            self.thread_cache.default_store = store
+            yield
+        finally:
+            self.thread_cache.default_store = prev_thread_local_store
 
-    try:
-        previous_branch_setting_func = store.branch_setting_func
-        store.branch_setting_func = lambda: branch_setting
-        yield
-    finally:
-        store.branch_setting_func = previous_branch_setting_func
+    @contextmanager
+    def branch_setting(self, branch_setting, course_id=None):
+        """
+        A context manager for temporarily setting the branch value for the given course' store
+        to the given branch_setting.  If course_id is None, the default store is used.
+        """
+        store = self._verify_modulestore_support(course_id, 'branch_setting')
+        with store.branch_setting(branch_setting, course_id):
+            yield
 
+    @contextmanager
+    def bulk_operations(self, course_id):
+        """
+        A context manager for notifying the store of bulk operations.
+        If course_id is None, the default store is used.
+        """
+        store = self._get_modulestore_for_courseid(course_id)
+        with store.bulk_operations(course_id):
+            yield
 
-@contextmanager
-def store_bulk_write_operations_on_course(store, course_id):
-    """
-    A context manager for notifying the store of bulk write events.
+    def ensure_indexes(self):
+        """
+        Ensure that all appropriate indexes are created that are needed by this modulestore, or raise
+        an exception if unable to.
 
-    In the case of Mongo, it temporarily disables refreshing the metadata inheritance tree
-    until the bulk operation is completed.
-
-    The store can be either the Mixed modulestore or a direct pointer to the underlying store.
-    """
-
-    # TODO
-    # Make this multi-process-safe if future operations need it.
-    # Right now, only Import Course, Clone Course, and Delete Course use this, so
-    # it's ok if the cached metadata in the memcache is invalid when another
-    # request comes in for the same course.
-
-    # if the caller passed in the mixed modulestore, get a direct pointer to the underlying store
-    if hasattr(store, '_get_modulestore_by_course_id'):
-        store = store._get_modulestore_by_course_id(course_id)
-
-    try:
-        if hasattr(store, 'begin_bulk_write_operation_on_course'):
-            store.begin_bulk_write_operation_on_course(course_id)
-        yield
-    finally:
-        if hasattr(store, 'begin_bulk_write_operation_on_course'):
-            store.end_bulk_write_operation_on_course(course_id)
+        This method is intended for use by tests and administrative commands, and not
+        to be run during server startup.
+        """
+        for store in self.modulestores:
+            store.ensure_indexes()

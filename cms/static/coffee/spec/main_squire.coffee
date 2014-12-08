@@ -38,7 +38,7 @@ requirejs.config({
         "domReady": "xmodule_js/common_static/js/vendor/domReady",
         "URI": "xmodule_js/common_static/js/vendor/URI.min",
 
-        "mathjax": "//edx-static.s3.amazonaws.com/mathjax-MathJax-727332c/MathJax.js?config=TeX-MML-AM_HTMLorMML-full&delayStartupUntil=configured",
+        "mathjax": "//cdn.mathjax.org/mathjax/2.2-latest/MathJax.js?config=TeX-MML-AM_HTMLorMML-full&delayStartupUntil=configured",
         "youtube": "//www.youtube.com/player_api?noext",
         "tender": "//edxedge.tenderapp.com/tender_widget.js"
 
@@ -176,5 +176,6 @@ jasmine.getFixtures().fixturesPath += 'coffee/fixtures'
 define([
     "coffee/spec/views/assets_spec",
     "js/spec/video/translations_editor_spec",
-    "js/spec/video/file_uploader_editor_spec"
+    "js/spec/video/file_uploader_editor_spec",
+    "js/spec/models/group_configuration_spec"
     ])

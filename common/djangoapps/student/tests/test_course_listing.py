@@ -6,7 +6,7 @@ from mock import patch, Mock
 
 from student.tests.factories import UserFactory
 from student.roles import GlobalStaff
-from xmodule.modulestore import MONGO_MODULESTORE_TYPE
+from xmodule.modulestore import ModuleStoreEnum
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
 from opaque_keys.edx.locations import SlashSeparatedCourseKey
@@ -15,6 +15,8 @@ from xmodule.error_module import ErrorDescriptor
 from django.test.client import Client
 from student.models import CourseEnrollment
 from student.views import get_course_enrollment_pairs
+import unittest
+from django.conf import settings
 
 
 class TestCourseListing(ModuleStoreTestCase):
@@ -54,6 +56,7 @@ class TestCourseListing(ModuleStoreTestCase):
         self.client.logout()
         super(TestCourseListing, self).tearDown()
 
+    @unittest.skipUnless(settings.ROOT_URLCONF == 'lms.urls', 'Test only valid in lms')
     def test_get_course_list(self):
         """
         Test getting courses
@@ -90,19 +93,22 @@ class TestCourseListing(ModuleStoreTestCase):
         Create good courses, courses that won't load, and deleted courses which still have
         roles. Test course listing.
         """
-        mongo_store = modulestore()._get_modulestore_by_type(MONGO_MODULESTORE_TYPE)
+        mongo_store = modulestore()._get_modulestore_by_type(ModuleStoreEnum.Type.mongo)
 
         good_location = SlashSeparatedCourseKey('testOrg', 'testCourse', 'RunBabyRun')
         self._create_course_with_access_groups(good_location)
 
         course_location = SlashSeparatedCourseKey('testOrg', 'doomedCourse', 'RunBabyRun')
         self._create_course_with_access_groups(course_location)
-        mongo_store.delete_course(course_location)
+        mongo_store.delete_course(course_location, ModuleStoreEnum.UserID.test)
 
         course_location = SlashSeparatedCourseKey('testOrg', 'erroredCourse', 'RunBabyRun')
         course = self._create_course_with_access_groups(course_location)
         course_db_record = mongo_store._find_one(course.location)
-        course_db_record.setdefault('metadata', {}).get('tabs', []).append({"type": "wiko", "name": "Wiki" })
+        course_db_record.setdefault('metadata', {}).get('tabs', []).append({
+            "type": "wiko",
+            "name": "Wiki",
+        })
         mongo_store.collection.update(
             {'_id': course.location.to_deprecated_son()},
             {'$set': {

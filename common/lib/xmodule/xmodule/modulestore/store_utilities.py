@@ -1,74 +1,60 @@
 import re
 import logging
+from collections import namedtuple
 
-from xmodule.contentstore.content import StaticContent
-from xmodule.modulestore import REVISION_OPTION_PUBLISHED_ONLY, REVISION_OPTION_DRAFT_ONLY
+import uuid
 
 
-def _prefix_only_url_replace_regex(prefix):
+def _prefix_only_url_replace_regex(pattern):
     """
-    Match static urls in quotes that don't end in '?raw'.
-
-    To anyone contemplating making this more complicated:
-    http://xkcd.com/1171/
+    Match urls in quotes pulling out the fields from pattern
     """
-    return ur"""
+    return re.compile(ur"""
         (?x)                      # flags=re.VERBOSE
         (?P<quote>\\?['"])        # the opening quotes
-        (?P<prefix>{prefix})      # the prefix
-        (?P<rest>.*?)             # everything else in the url
+        {}
         (?P=quote)                # the first matching closing quote
-        """.format(prefix=re.escape(prefix))
-
-
-def _prefix_and_category_url_replace_regex(prefix):
-    """
-    Match static urls in quotes that don't end in '?raw'.
-
-    To anyone contemplating making this more complicated:
-    http://xkcd.com/1171/
-    """
-    return ur"""
-        (?x)                      # flags=re.VERBOSE
-        (?P<quote>\\?['"])        # the opening quotes
-        (?P<prefix>{prefix})      # the prefix
-        (?P<category>[^/]+)/
-        (?P<rest>.*?)             # everything else in the url
-        (?P=quote)                # the first matching closing quote
-        """.format(prefix=re.escape(prefix))
+        """.format(pattern))
 
 
 def rewrite_nonportable_content_links(source_course_id, dest_course_id, text):
     """
-    Does a regex replace on non-portable links:
+    rewrite any non-portable links to (->) relative links:
          /c4x/<org>/<course>/asset/<name> -> /static/<name>
          /jump_to/i4x://<org>/<course>/<category>/<name> -> /jump_to_id/<id>
-
     """
 
     def portable_asset_link_subtitution(match):
         quote = match.group('quote')
-        rest = match.group('rest')
-        return quote + '/static/' + rest + quote
+        block_id = match.group('block_id')
+        return quote + '/static/' + block_id + quote
 
     def portable_jump_to_link_substitution(match):
         quote = match.group('quote')
-        rest = match.group('rest')
+        rest = match.group('block_id')
         return quote + '/jump_to_id/' + rest + quote
 
-    # NOTE: ultimately link updating is not a hard requirement, so if something blows up with
-    # the regex substitution, log the error and continue
-    c4x_link_base = StaticContent.get_base_url_path_for_course_assets(source_course_id)
-    try:
-        text = re.sub(_prefix_only_url_replace_regex(c4x_link_base), portable_asset_link_subtitution, text)
-    except Exception as exc:  # pylint: disable=broad-except
-        logging.warning("Error producing regex substitution %r for text = %r.\n\nError msg = %s", c4x_link_base, text, str(exc))
+    # if something blows up, log the error and continue
 
-    jump_to_link_base = u'/courses/{course_key_string}/jump_to/i4x://{course_key.org}/{course_key.course}/'.format(
-        course_key_string=source_course_id.to_deprecated_string(), course_key=source_course_id
+    # create a serialized template for what the id will look like in the source_course but with
+    # the block_id as a regex pattern
+    placeholder_id = uuid.uuid4().hex
+    asset_block_pattern = unicode(source_course_id.make_asset_key('asset', placeholder_id))
+    asset_block_pattern = asset_block_pattern.replace(placeholder_id, r'(?P<block_id>.*?)')
+    try:
+        text = _prefix_only_url_replace_regex(asset_block_pattern).sub(portable_asset_link_subtitution, text)
+    except Exception as exc:  # pylint: disable=broad-except
+        logging.warning("Error producing regex substitution %r for text = %r.\n\nError msg = %s", asset_block_pattern, text, str(exc))
+
+    placeholder_category = 'cat_{}'.format(uuid.uuid4().hex)
+    usage_block_pattern = unicode(source_course_id.make_usage_key(placeholder_category, placeholder_id))
+    usage_block_pattern = usage_block_pattern.replace(placeholder_category, r'(?P<category>[^/+@]+)')
+    usage_block_pattern = usage_block_pattern.replace(placeholder_id, r'(?P<block_id>.*?)')
+    jump_to_link_base = ur'/courses/{course_key_string}/jump_to/{usage_key_string}'.format(
+        course_key_string=unicode(source_course_id), usage_key_string=usage_block_pattern
     )
     try:
-        text = re.sub(_prefix_and_category_url_replace_regex(jump_to_link_base), portable_jump_to_link_substitution, text)
+        text = _prefix_only_url_replace_regex(jump_to_link_base).sub(portable_jump_to_link_substitution, text)
     except Exception as exc:  # pylint: disable=broad-except
         logging.warning("Error producing regex substitution %r for text = %r.\n\nError msg = %s", jump_to_link_base, text, str(exc))
 
@@ -88,108 +74,28 @@ def rewrite_nonportable_content_links(source_course_id, dest_course_id, text):
     return text
 
 
-def _clone_modules(modulestore, modules, source_course_id, dest_course_id, user_id):
-    for module in modules:
-        original_loc = module.location
-        module.location = module.location.map_into_course(dest_course_id)
-        if module.location.category == 'course':
-            module.location = module.location.replace(name=module.location.run)
-
-        print "Cloning module {0} to {1}....".format(original_loc, module.location)
-
-        if 'data' in module.fields and module.fields['data'].is_set_on(module) and isinstance(module.data, basestring):
-            module.data = rewrite_nonportable_content_links(
-                source_course_id, dest_course_id, module.data
-            )
-
-        # repoint children
-        if module.has_children:
-            new_children = []
-            for child_loc in module.children:
-                child_loc = child_loc.map_into_course(dest_course_id)
-                new_children.append(child_loc)
-
-            module.children = new_children
-
-        modulestore.update_item(module, user_id, allow_not_found=True)
-
-
-def clone_course(modulestore, contentstore, source_course_id, dest_course_id, user_id):
-    # check to see if the dest_location exists as an empty course
-    # we need an empty course because the app layers manage the permissions and users
-    if not modulestore.has_course(dest_course_id):
-        raise Exception(u"An empty course at {0} must have already been created. Aborting...".format(dest_course_id))
-
-    # verify that the dest_location really is an empty course, which means only one with an optional 'overview'
-    dest_modules = modulestore.get_items(dest_course_id)
-
-    for module in dest_modules:
-        if module.location.category == 'course' or (
-                module.location.category == 'about' and module.location.name == 'overview'
-        ):
-            continue
-        # only course and about overview allowed
-        raise Exception("Course at destination {0} is not an empty course. You can only clone into an empty course. Aborting...".format(dest_course_id))
-
-    # check to see if the source course is actually there
-    if not modulestore.has_course(source_course_id):
-        raise Exception("Cannot find a course at {0}. Aborting".format(source_course_id))
-
-    # Get all modules under this namespace which is (tag, org, course) tuple
-    modules = modulestore.get_items(source_course_id, revision=REVISION_OPTION_PUBLISHED_ONLY)
-    _clone_modules(modulestore, modules, source_course_id, dest_course_id, user_id)
-    course_location = dest_course_id.make_usage_key('course', dest_course_id.run)
-    modulestore.publish(course_location, user_id)
-
-    modules = modulestore.get_items(source_course_id, revision=REVISION_OPTION_DRAFT_ONLY)
-    _clone_modules(modulestore, modules, source_course_id, dest_course_id, user_id)
-
-    # now iterate through all of the assets and clone them
-    # first the thumbnails
-    thumb_keys = contentstore.get_all_content_thumbnails_for_course(source_course_id)
-    for thumb_key in thumb_keys:
-        content = contentstore.find(thumb_key)
-        content.location = content.location.map_into_course(dest_course_id)
-
-        print "Cloning thumbnail {0} to {1}".format(thumb_key, content.location)
-
-        contentstore.save(content)
-
-    # now iterate through all of the assets, also updating the thumbnail pointer
-
-    asset_keys, __ = contentstore.get_all_content_for_course(source_course_id)
-    for asset_key in asset_keys:
-        content = contentstore.find(asset_key)
-        content.location = content.location.map_into_course(dest_course_id)
-
-        # be sure to update the pointer to the thumbnail
-        if content.thumbnail_location is not None:
-            content.thumbnail_location = content.thumbnail_location.map_into_course(dest_course_id)
-
-        print "Cloning asset {0} to {1}".format(asset_key, content.location)
-
-        contentstore.save(content)
-
-    return True
-
-
-def delete_course(modulestore, contentstore, course_key, commit=False):
+def draft_node_constructor(module, url, parent_url, location=None, parent_location=None, index=None):
     """
-    This method will actually do the work to delete all content in a course in a MongoDB backed
-    courseware store. BE VERY CAREFUL, this is not reversable.
+    Contructs a draft_node namedtuple with defaults.
     """
+    draft_node = namedtuple('draft_node', ['module', 'location', 'url', 'parent_location', 'parent_url', 'index'])
+    return draft_node(module, location, url, parent_location, parent_url, index)
 
-    # check to see if the source course is actually there
-    if not modulestore.has_course(course_key):
-        raise Exception("Cannot find a course at {0}. Aborting".format(course_key))
 
-    if commit:
-        print "Deleting assets and thumbnails {}".format(course_key)
-        contentstore.delete_all_course_assets(course_key)
+def get_draft_subtree_roots(draft_nodes):
+    """
+    Takes a list of draft_nodes, which are namedtuples, each of which identify
+    itself and its parent.
 
-    # finally delete the course
-    print "Deleting {0}...".format(course_key)
-    if commit:
-        modulestore.delete_course(course_key, '**replace-user**')
+    If a draft_node is in `draft_nodes`, then we expect for all its children
+    should be in `draft_nodes` as well. Since `_import_draft` is recursive,
+    we only want to import the roots of any draft subtrees contained in
+    `draft_nodes`.
 
-    return True
+    This generator yields those roots.
+    """
+    urls = [draft_node.url for draft_node in draft_nodes]
+
+    for draft_node in draft_nodes:
+        if draft_node.parent_url not in urls:
+            yield draft_node

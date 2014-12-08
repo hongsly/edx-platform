@@ -48,9 +48,12 @@ class NoseTestSuite(TestSuite):
             # will run the importable coverage rather than the
             # coverage that OS path finds.
 
+            if not cmd0.endswith('.py'):
+                cmd0 = "`which {}`".format(cmd0)
+
             cmd = (
                 "python -m coverage run --rcfile={root}/.coveragerc "
-                "`which {cmd0}` {cmd_rest}".format(
+                "{cmd0} {cmd_rest}".format(
                     root=self.root,
                     cmd0=cmd0,
                     cmd_rest=cmd_rest,
@@ -98,14 +101,6 @@ class SystemTestSuite(NoseTestSuite):
 
     def __enter__(self):
         super(SystemTestSuite, self).__enter__()
-        args = [self.root, '--settings=test']
-
-        if self.fasttest:
-            # TODO: Fix the tests so that collectstatic isn't needed ever
-            # add --skip-collect to this when the tests are fixed
-            args.append('--skip-collect')
-
-        call_task('pavelib.assets.update_assets', args=args)
 
     @property
     def cmd(self):

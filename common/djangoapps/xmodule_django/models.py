@@ -1,6 +1,8 @@
 from django.db import models
 from django.core.exceptions import ValidationError
 from opaque_keys.edx.locations import SlashSeparatedCourseKey, Location
+from opaque_keys.edx.keys import CourseKey, UsageKey
+from opaque_keys.edx.locator import Locator
 
 from south.modelsinspector import add_introspection_rules
 add_introspection_rules([], ["^xmodule_django\.models\.CourseKeyField"])
@@ -43,8 +45,30 @@ class NoneToEmptyQuerySet(models.query.QuerySet):
         return super(NoneToEmptyQuerySet, self)._filter_or_exclude(*args, **kwargs)
 
 
+def _strip_object(key):
+    """
+    Strips branch and version info if the given key supports those attributes.
+    """
+    if hasattr(key, 'version_agnostic') and hasattr(key, 'for_branch'):
+        return key.for_branch(None).version_agnostic()
+    else:
+        return key
+
+
+def _strip_value(value, lookup='exact'):
+    """
+    Helper function to remove the branch and version information from the given value,
+    which could be a single object or a list.
+    """
+    if lookup == 'in':
+        stripped_value = [_strip_object(el) for el in value]
+    else:
+        stripped_value = _strip_object(value)
+    return stripped_value
+
+
 class CourseKeyField(models.CharField):
-    description = "A SlashSeparatedCourseKey object, saved to the DB in the form of a string"
+    description = "A CourseKey object, saved to the DB in the form of a string"
 
     __metaclass__ = models.SubfieldBase
 
@@ -54,13 +78,13 @@ class CourseKeyField(models.CharField):
         if value is self.Empty or value is None:
             return None
 
-        assert isinstance(value, (basestring, SlashSeparatedCourseKey))
+        assert isinstance(value, (basestring, CourseKey))
         if value == '':
             # handle empty string for models being created w/o fields populated
             return None
 
         if isinstance(value, basestring):
-            return SlashSeparatedCourseKey.from_deprecated_string(value)
+            return CourseKey.from_string(value)
         else:
             return value
 
@@ -68,14 +92,18 @@ class CourseKeyField(models.CharField):
         if lookup == 'isnull':
             raise TypeError('Use CourseKeyField.Empty rather than None to query for a missing CourseKeyField')
 
-        return super(CourseKeyField, self).get_prep_lookup(lookup, value)
+        return super(CourseKeyField, self).get_prep_lookup(
+            lookup,
+            # strip key before comparing
+            _strip_value(value, lookup)
+        )
 
     def get_prep_value(self, value):
         if value is self.Empty or value is None:
             return ''  # CharFields should use '' as their empty value, rather than None
 
-        assert isinstance(value, SlashSeparatedCourseKey)
-        return value.to_deprecated_string()
+        assert isinstance(value, CourseKey)
+        return unicode(_strip_value(value))
 
     def validate(self, value, model_instance):
         """Validate Empty values, otherwise defer to the parent"""
@@ -104,7 +132,7 @@ class LocationKeyField(models.CharField):
         if value is self.Empty or value is None:
             return value
 
-        assert isinstance(value, (basestring, Location))
+        assert isinstance(value, (basestring, UsageKey))
 
         if value == '':
             return None
@@ -118,14 +146,19 @@ class LocationKeyField(models.CharField):
         if lookup == 'isnull':
             raise TypeError('Use LocationKeyField.Empty rather than None to query for a missing LocationKeyField')
 
-        return super(LocationKeyField, self).get_prep_lookup(lookup, value)
+        # remove version and branch info before comparing keys
+        return super(LocationKeyField, self).get_prep_lookup(
+            lookup,
+            # strip key before comparing
+            _strip_value(value, lookup)
+        )
 
     def get_prep_value(self, value):
         if value is self.Empty:
             return ''
 
-        assert isinstance(value, Location)
-        return value.to_deprecated_string()
+        assert isinstance(value, UsageKey)
+        return unicode(_strip_value(value))
 
     def validate(self, value, model_instance):
         """Validate Empty values, otherwise defer to the parent"""

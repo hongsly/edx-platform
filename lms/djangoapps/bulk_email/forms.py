@@ -9,7 +9,7 @@ from django.core.exceptions import ValidationError
 from bulk_email.models import CourseEmailTemplate, COURSE_EMAIL_MESSAGE_BODY_TAG, CourseAuthorization
 
 from opaque_keys import InvalidKeyError
-from xmodule.modulestore import XML_MODULESTORE_TYPE
+from xmodule.modulestore import ModuleStoreEnum
 from xmodule.modulestore.django import modulestore
 from opaque_keys.edx.keys import CourseKey
 from opaque_keys.edx.locations import SlashSeparatedCourseKey
@@ -17,11 +17,14 @@ from opaque_keys.edx.locations import SlashSeparatedCourseKey
 log = logging.getLogger(__name__)
 
 
-class CourseEmailTemplateForm(forms.ModelForm):  # pylint: disable=R0924
+class CourseEmailTemplateForm(forms.ModelForm):  # pylint: disable=incomplete-protocol
     """Form providing validation of CourseEmail templates."""
 
-    class Meta:  # pylint: disable=C0111
+    name = forms.CharField(required=False)
+
+    class Meta:  # pylint: disable=missing-docstring
         model = CourseEmailTemplate
+        fields = ('html_template', 'plain_template', 'name')
 
     def _validate_template(self, template):
         """Check the template for required tags."""
@@ -50,11 +53,30 @@ class CourseEmailTemplateForm(forms.ModelForm):  # pylint: disable=R0924
         self._validate_template(template)
         return template
 
+    def clean_name(self):
+        """Validate the name field. Enforce uniqueness constraint on 'name' field"""
 
-class CourseAuthorizationAdminForm(forms.ModelForm):  # pylint: disable=R0924
+        # Note that we get back a blank string in the Form for an empty 'name' field
+        # we want those to be set to None in Python and NULL in the database
+        name = self.cleaned_data.get("name").strip() or None
+
+        # if we are creating a new CourseEmailTemplate, then we need to
+        # enforce the uniquess constraint as part of the Form validation
+        if not self.instance.pk:
+            try:
+                CourseEmailTemplate.get_template(name)
+                # already exists, this is no good
+                raise ValidationError('Name of "{}" already exists, this must be unique.'.format(name))
+            except CourseEmailTemplate.DoesNotExist:
+                # this is actually the successful validation
+                pass
+        return name
+
+
+class CourseAuthorizationAdminForm(forms.ModelForm):  # pylint: disable=incomplete-protocol
     """Input form for email enabling, allowing us to verify data."""
 
-    class Meta:  # pylint: disable=C0111
+    class Meta:  # pylint: disable=missing-docstring
         model = CourseAuthorization
 
     def clean_course_id(self):
@@ -78,7 +100,7 @@ class CourseAuthorizationAdminForm(forms.ModelForm):  # pylint: disable=R0924
             raise forms.ValidationError(msg)
 
         # Now, try and discern if it is a Studio course - HTML editor doesn't work with XML courses
-        is_studio_course = modulestore().get_modulestore_type(course_key) != XML_MODULESTORE_TYPE
+        is_studio_course = modulestore().get_modulestore_type(course_key) != ModuleStoreEnum.Type.xml
         if not is_studio_course:
             msg = "Course Email feature is only available for courses authored in Studio. "
             msg += '"{0}" appears to be an XML backed course.'.format(course_key.to_deprecated_string())

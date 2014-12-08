@@ -1,9 +1,9 @@
 from django_future.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
 from django.contrib.auth.models import User
-from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.core.paginator import Paginator, EmptyPage
 from django.core.urlresolvers import reverse
-from django.http import HttpResponse
+from django.http import Http404, HttpResponse, HttpResponseBadRequest
 import json
 import logging
 import re
@@ -13,7 +13,7 @@ from courseware.courses import get_course_with_access
 from edxmako.shortcuts import render_to_response
 
 from . import cohorts
-
+from .models import CourseUserGroup
 
 log = logging.getLogger(__name__)
 
@@ -26,15 +26,15 @@ def json_http_response(data):
     return HttpResponse(json.dumps(data), content_type="application/json")
 
 
-def split_by_comma_and_whitespace(s):
+def split_by_comma_and_whitespace(cstr):
     """
     Split a string both by commas and whitespice.  Returns a list.
     """
-    return re.split(r'[\s,]+', s)
+    return re.split(r'[\s,]+', cstr)
 
 
 @ensure_csrf_cookie
-def list_cohorts(request, course_key):
+def list_cohorts(request, course_key_string):
     """
     Return json dump of dict:
 
@@ -43,12 +43,19 @@ def list_cohorts(request, course_key):
     """
 
     # this is a string when we get it here
-    course_key = SlashSeparatedCourseKey.from_deprecated_string(course_key)
+    course_key = SlashSeparatedCourseKey.from_deprecated_string(course_key_string)
 
-    get_course_with_access(request.user, 'staff', course_key)
+    course = get_course_with_access(request.user, 'staff', course_key)
 
-    all_cohorts = [{'name': c.name, 'id': c.id}
-                   for c in cohorts.get_course_cohorts(course_key)]
+    all_cohorts = [
+        {
+            'name': c.name,
+            'id': c.id,
+            'user_count': c.users.count(),
+            'assignment_type': cohorts.CohortAssignmentType.get(c, course)
+        }
+        for c in cohorts.get_course_cohorts(course)
+    ]
 
     return json_http_response({'success': True,
                                'cohorts': all_cohorts})
@@ -56,7 +63,7 @@ def list_cohorts(request, course_key):
 
 @ensure_csrf_cookie
 @require_POST
-def add_cohort(request, course_key):
+def add_cohort(request, course_key_string):
     """
     Return json of dict:
     {'success': True,
@@ -69,30 +76,32 @@ def add_cohort(request, course_key):
      'msg': error_msg} if there's an error
     """
     # this is a string when we get it here
-    course_key = SlashSeparatedCourseKey.from_deprecated_string(course_key)
+    course_key = SlashSeparatedCourseKey.from_deprecated_string(course_key_string)
 
     get_course_with_access(request.user, 'staff', course_key)
 
     name = request.POST.get("name")
     if not name:
         return json_http_response({'success': False,
-                                'msg': "No name specified"})
+                                   'msg': "No name specified"})
 
     try:
         cohort = cohorts.add_cohort(course_key, name)
     except ValueError as err:
         return json_http_response({'success': False,
-                                'msg': str(err)})
+                                   'msg': str(err)})
 
-    return json_http_response({'success': 'True',
-                            'cohort': {
-                                'id': cohort.id,
-                                'name': cohort.name
-                                }})
+    return json_http_response({
+        'success': 'True',
+        'cohort': {
+            'id': cohort.id,
+            'name': cohort.name
+        }
+    })
 
 
 @ensure_csrf_cookie
-def users_in_cohort(request, course_key, cohort_id):
+def users_in_cohort(request, course_key_string, cohort_id):
     """
     Return users in the cohort.  Show up to 100 per page, and page
     using the 'page' GET attribute in the call.  Format:
@@ -106,7 +115,7 @@ def users_in_cohort(request, course_key, cohort_id):
     }
     """
     # this is a string when we get it here
-    course_key = SlashSeparatedCourseKey.from_deprecated_string(course_key)
+    course_key = SlashSeparatedCourseKey.from_deprecated_string(course_key_string)
 
     get_course_with_access(request.user, 'staff', course_key)
 
@@ -115,17 +124,19 @@ def users_in_cohort(request, course_key, cohort_id):
     cohort = cohorts.get_cohort_by_id(course_key, int(cohort_id))
 
     paginator = Paginator(cohort.users.all(), 100)
-    page = request.GET.get('page')
+    try:
+        page = int(request.GET.get('page'))
+    except (TypeError, ValueError):
+        # These strings aren't user-facing so don't translate them
+        return HttpResponseBadRequest('Requested page must be numeric')
+    else:
+        if page < 0:
+            return HttpResponseBadRequest('Requested page must be greater than zero')
+
     try:
         users = paginator.page(page)
-    except PageNotAnInteger:
-        # return the first page
-        page = 1
-        users = paginator.page(page)
     except EmptyPage:
-        # Page is out of range.  Return last page
-        page = paginator.num_pages
-        contacts = paginator.page(page)
+        users = []  # When page > number of pages, return a blank page
 
     user_info = [{'username': u.username,
                   'email': u.email,
@@ -140,7 +151,7 @@ def users_in_cohort(request, course_key, cohort_id):
 
 @ensure_csrf_cookie
 @require_POST
-def add_users_to_cohort(request, course_key, cohort_id):
+def add_users_to_cohort(request, course_key_string, cohort_id):
     """
     Return json dict of:
 
@@ -154,12 +165,20 @@ def add_users_to_cohort(request, course_key, cohort_id):
                   'previous_cohort': ...}, ...],
      'present': [str1, str2, ...],    # already there
      'unknown': [str1, str2, ...]}
+
+     Raises Http404 if the cohort cannot be found for the given course.
     """
     # this is a string when we get it here
-    course_key = SlashSeparatedCourseKey.from_deprecated_string(course_key)
+    course_key = SlashSeparatedCourseKey.from_deprecated_string(course_key_string)
     get_course_with_access(request.user, 'staff', course_key)
 
-    cohort = cohorts.get_cohort_by_id(course_key, cohort_id)
+    try:
+        cohort = cohorts.get_cohort_by_id(course_key, cohort_id)
+    except CourseUserGroup.DoesNotExist:
+        raise Http404("Cohort (ID {cohort_id}) not found for {course_key_string}".format(
+            cohort_id=cohort_id,
+            course_key_string=course_key_string
+        ))
 
     users = request.POST.get('users', '')
     added = []
@@ -196,7 +215,7 @@ def add_users_to_cohort(request, course_key, cohort_id):
 
 @ensure_csrf_cookie
 @require_POST
-def remove_user_from_cohort(request, course_key, cohort_id):
+def remove_user_from_cohort(request, course_key_string, cohort_id):
     """
     Expects 'username': username in POST data.
 
@@ -207,7 +226,7 @@ def remove_user_from_cohort(request, course_key, cohort_id):
      'msg': error_msg}
     """
     # this is a string when we get it here
-    course_key = SlashSeparatedCourseKey.from_deprecated_string(course_key)
+    course_key = SlashSeparatedCourseKey.from_deprecated_string(course_key_string)
     get_course_with_access(request.user, 'staff', course_key)
 
     username = request.POST.get('username')
@@ -226,12 +245,12 @@ def remove_user_from_cohort(request, course_key, cohort_id):
                                    'msg': "No user '{0}'".format(username)})
 
 
-def debug_cohort_mgmt(request, course_key):
+def debug_cohort_mgmt(request, course_key_string):
     """
     Debugging view for dev.
     """
     # this is a string when we get it here
-    course_key = SlashSeparatedCourseKey.from_deprecated_string(course_key)
+    course_key = SlashSeparatedCourseKey.from_deprecated_string(course_key_string)
     # add staff check to make sure it's safe if it's accidentally deployed.
     get_course_with_access(request.user, 'staff', course_key)
 
